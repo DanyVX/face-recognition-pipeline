@@ -9,7 +9,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Literal
 
-from pydantic import ValidationError
+from pydantic import Field, ValidationError
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -27,6 +27,19 @@ class Settings(BaseSettings):
     store_raw_images: bool = False
     data_dir: Path = Path("data")
     model_dir: Path = Path("models")
+
+    # Detection
+    det_min_confidence: float = Field(0.5, ge=0.0, le=1.0)
+    min_face_px: int = Field(20, ge=1)
+    max_faces: int = Field(10, ge=1)
+
+    # ONNX Runtime. Providers are tried in order; unavailable ones fall back to CPU with a log line.
+    onnx_providers: str = "CUDAExecutionProvider,CPUExecutionProvider"
+    onnx_threads: int | None = Field(None, ge=1)  # None = ORT default (all cores)
+
+    @property
+    def provider_list(self) -> list[str]:
+        return [p.strip() for p in self.onnx_providers.split(",") if p.strip()]
 
 
 def load_settings() -> Settings:
