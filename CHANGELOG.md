@@ -28,3 +28,6 @@ All notable changes to this project are documented here. Format follows
   SQLite identity store with model-tagged embeddings; gallery service with enroll, verify,
   identify, delete, update, list, duplicate-identity policy and locking; index scaling
   benchmark (M4).
+
+- Quality features and gates (size, confidence, framing, sharpness, exposure, pose) with reason
+  codes, loadable thresholds and `aligned_from_crop` (M5).
