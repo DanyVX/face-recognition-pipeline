@@ -37,3 +37,17 @@ Conventions that change behavior (documented, tested):
   downscale by the loader), not in original-image pixels.
 
 All M1 spec edge cases are covered by tests; none are listed as not covered.
+
+## M2 (alignment and pose): observations and conventions
+- On one portrait, the 180-degree-rotated copy gave visibly worse landmark localization (mouth
+  corners about 12 px apart instead of about 40) and a fit error of 0.31, against 0.07-0.14 for
+  the other orientations. Rotated faces are therefore usable but less reliable; measured effect
+  on verification accuracy comes with the M6 robustness slices.
+- `DEFAULT_MAX_FIT_ERROR = 0.4` and the pose-gate thresholds are provisional (see D-012/D-013).
+- Alignment resamples with bilinear interpolation and zero-pads outside the source image.
+- The stored reference image (`tests/fixtures/align_reference.png`) is produced by this
+  implementation and guards against accidental change; its correctness is separately checked by
+  the marker-position test, which does not use the stored image.
+
+All M2 spec edge cases (degenerate/collinear landmarks, landmarks outside the image, extreme
+pose, mirrored landmark order, NaN landmarks) are covered by tests; none are listed as not covered.

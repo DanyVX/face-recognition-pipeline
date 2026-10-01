@@ -72,3 +72,31 @@ Backends sit behind `FaceDetector` / `FaceEmbedder` protocols so they can be swa
   or substitution, not against a bad first download. Models above 500 MB are refused by code.
 - Default tests that need weights carry `@pytest.mark.needs_models` and skip when the weights
   are absent, so the default suite needs no network.
+
+### D-011 (2026-10-01): closed-form (Umeyama) similarity instead of `cv2.estimateAffinePartial2D`
+- Options: OpenCV's RANSAC/LMEDS-based estimator, `skimage.transform.SimilarityTransform`, own
+  Umeyama least squares.
+- Choice: **own Umeyama** (`align/aligner.py`, about 30 lines, numpy only).
+- Why: deterministic by construction (no random sampling, which matters for the "same input ->
+  same embedding" criterion), explicit control over reflection (never allowed) and degeneracy
+  checks, and no extra dependency. With exactly five correspondences a robust estimator buys
+  nothing.
+
+### D-012 (2026-10-01): alignment fails loudly; the fit error is a provisional sanity check
+- Every unusable input raises `InvalidLandmarksError` with a stable `reason`
+  (`BAD_SHAPE`, `NOT_FINITE`, `DEGENERATE`, `OUT_OF_IMAGE`, `BAD_FIT`), never a best-effort crop.
+- `BAD_FIT` uses the RMS residual of the similarity fit relative to the template's inter-ocular
+  distance. Measured on one portrait: real detections 0.07-0.31 (the 180-degree-rotated copy has
+  the worst landmark localization), mirrored left/right order 0.66. Threshold set to 0.4 between
+  the two. **Provisional**: it is based on a few examples and is recalibrated in M5 on a
+  validation split.
+- Landmarks outside the image are rejected by default (face cut off by the frame);
+  `allow_outside=True` zero-pads instead.
+
+### D-013 (2026-10-01): pose proxies computed in the aligned frame; gate scaffold
+- Yaw/pitch are geometric ratios measured after roll and scale are removed by the alignment, so
+  head tilt does not leak into them (tested). They are **not calibrated degrees**.
+- `quality/base.py` defines `GateResult` (gate, passed, reason code, value, threshold) and a
+  `Gate` protocol; the pose gate is the first implementation, the rest arrive in M5.
+- Roll is not gated by default: the alignment uprights a rotated face. That is a feature for
+  tilted phone photos, and means an upside-down face still produces an upright crop.

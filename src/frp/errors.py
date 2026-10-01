@@ -65,8 +65,14 @@ class LowQualityError(FrpError):
 
 
 class InvalidLandmarksError(FrpError):
+    """Landmarks cannot be used for alignment. ``reason`` is a stable machine-readable token."""
+
     code = "INVALID_LANDMARKS"
     http_status = 422
+
+    def __init__(self, message: str, reason: str = "INVALID") -> None:
+        super().__init__(message)
+        self.reason = reason
 
 
 # --- models / embeddings ---------------------------------------------------------------------
