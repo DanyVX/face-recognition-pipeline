@@ -50,3 +50,6 @@ models/
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# Throwaway local scripts
+.scratch/

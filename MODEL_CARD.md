@@ -10,8 +10,10 @@ in M1/M3 when models are wired in. **Anything marked UNVERIFIED must not be reli
 | InsightFace **code** license | MIT, per the repository README (retrieved 2026-10-01) |
 | Pretrained **model** license | **Non-commercial research use only**, per the repository README (retrieved 2026-10-01) |
 | Commercial use | README says to contact the vendor for a commercial license (`buffalo_l` pack: `recognition-oss-pack@insightface.ai`, as listed in the README) |
-| Exact license text shipped with the model files | **UNVERIFIED**: still to be read from the downloaded pack and the primary README |
-| Per-model checksums | TBD: recorded when `scripts/download_models.py` is written |
+| License text shipped with the model files | **None.** `buffalo_l.zip` contains only five `.onnx` files (checked 2026-10-01), so the README statement above is the only license information available. The primary README should still be re-read before release |
+| Pack | `buffalo_l.zip` from the InsightFace GitHub release v0.7, 288,621,354 bytes, SHA-256 `80ffe37d8a5940d59a7384c201a2a38d4741f2f3c51eef46ebb28218a7b0ca2f` (recorded on 2026-10-01, trust on first use) |
+| `det_10g.onnx` (SCRFD detector) | 16,923,827 bytes, SHA-256 `5838f7fe053675b1c7a08b633df49e7af5495cee0493c7dcf6697200b85b5b91` |
+| `w600k_r50.onnx` (ArcFace ResNet-50 embedder, 512-d) | 174,383,860 bytes, SHA-256 `4c06341c33c2ca1f86781dab0e829f88ad5b64be9fba56e56bc9ebdefc619e43` |
 
 Source: https://github.com/deepinsight/insightface (README, section on licenses). The README text was
 retrieved through a summarizing web-fetch tool, so **re-read the primary text before release** and

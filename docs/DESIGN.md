@@ -42,3 +42,33 @@ Backends sit behind `FaceDetector` / `FaceEmbedder` protocols so they can be swa
 ### D-006 (2026-10-01): Windows included in the CI test matrix
 - CLAUDE.md marks Windows optional; the project is developed on Windows and the matrix is cheap at
   this stage. Revisit if heavy dependencies make Windows jobs slow.
+
+### D-007 (2026-10-01): own SCRFD pre/post-processing on onnxruntime, not the `insightface` package
+- Options: `insightface` Python package, own decode over `onnxruntime`.
+- Choice: **own implementation** (`detect/scrfd.py`), following the public reference algorithm.
+- Why: the package pulls in heavy build dependencies, would make the backend swap less visible,
+  and the decode (about 100 lines) is easy to unit-test with a fake session. The risk is a subtle
+  deviation from the reference; it is mitigated by testing against the real model on a real face
+  (box and landmarks sane, stable under flips/rotations/scaling) and by the M6 benchmarks.
+
+### D-008 (2026-10-01): "original image space" and the image loader
+- Definition: the EXIF-upright pixel grid at the original resolution. `LoadedImage` keeps the
+  (possibly downscaled) array plus the factors to map points back.
+- Decode with Pillow (format sniffing by magic bytes, bomb guard, EXIF, mode conversion);
+  OpenCV is used only for resizing and warping. Pillow handles palette/CMYK/16-bit/animated
+  inputs that `cv2.imdecode` handles inconsistently.
+- Bounded downscale: long side <= 4096 (configurable). 108 MP photos load; more than 128 MP is
+  rejected as a potential decompression bomb, before pixel decoding.
+- Alpha is composited on white; 16-bit grayscale is scaled by 1/257 (65535 -> 255).
+
+### D-009 (2026-10-01): `touches_border` in addition to `visible_fraction`
+- Observed on the real model: when a crop slices through a face, SCRFD predicts a box ending at
+  the image edge, so `visible_fraction` stays near 1. A face whose box touches the border is
+  therefore flagged truncated. Trade-off: a face filling the whole frame is also flagged
+  (conservative; the quality gate in M5 decides what to do with it).
+
+### D-010 (2026-10-01): model downloads pinned by SHA-256, recorded on first download
+- Upstream does not publish checksums that I verified, so pins protect against later corruption
+  or substitution, not against a bad first download. Models above 500 MB are refused by code.
+- Default tests that need weights carry `@pytest.mark.needs_models` and skip when the weights
+  are absent, so the default suite needs no network.
