@@ -51,3 +51,13 @@ All M1 spec edge cases are covered by tests; none are listed as not covered.
 
 All M2 spec edge cases (degenerate/collinear landmarks, landmarks outside the image, extreme
 pose, mirrored landmark order, NaN landmarks) are covered by tests; none are listed as not covered.
+
+## M3 (embedding): observations and conventions
+- Bitwise determinism was observed on one machine (Intel i5-7300U, ONNX Runtime 1.30.0 CPU,
+  default thread count). Results across CPUs, ONNX Runtime versions or thread counts, and on
+  GPU, are not measured; floating-point summation order can differ. Tests use tolerances for
+  anything but repeated calls on the same machine.
+- Concurrency was tested with at most 8 callers on a 2-core machine.
+- GPU execution (CUDA provider) has not been run; only the CPU fallback path is exercised.
+- fp16 vs fp32: a probe on random input gave cosine 0.999997 (4 samples, not a result). The real
+  measurement on LFW crops is `bench/precision.py` (M6); until then there is no fp16 claim.

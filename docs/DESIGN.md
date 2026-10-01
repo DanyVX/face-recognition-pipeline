@@ -100,3 +100,37 @@ Backends sit behind `FaceDetector` / `FaceEmbedder` protocols so they can be swa
   `Gate` protocol; the pose gate is the first implementation, the rest arrive in M5.
 - Roll is not gated by default: the alignment uprights a rotated face. That is a feature for
   tilted phone photos, and means an upside-down face still produces an upright crop.
+
+### D-014 (2026-10-02): embeddings are version-tagged by construction
+- `FaceEmbedder.embed` returns an `EmbeddingBatch(vectors, info)`, never a bare array. `ModelInfo`
+  holds `model_id`, the SHA-256 of the model file, `preprocess_version` and the dimension.
+  `cosine_similarity` refuses to compare batches with different infos (`ModelMismatchError`) and
+  refuses non-unit vectors (the "normalization forgotten" case). The index (M4) enforces the same
+  check at load and at query time.
+- `preprocess_version` must be bumped whenever pre-processing changes in any way, including the
+  alignment template or interpolation, because it changes what the model sees.
+
+### D-015 (2026-10-02): batching, chunking and thread safety
+- Inputs are processed in chunks of `max_batch` (default 16) to bound memory; an empty batch
+  returns `(0, 512)` without calling the model.
+- The embedder holds no mutable state and ONNX Runtime sessions allow concurrent `run`, so no lock
+  is used. Tested with 4 and 8 concurrent callers (real model and fake session respectively).
+- Measured on this machine (CPU, ONNX Runtime 1.30.0): a face embedded inside a batch of 1, 2 or
+  5 is bitwise identical to the same face embedded alone, and repeated runs are bitwise
+  identical. Tests assert a 1e-5 tolerance for batch-vs-single (the portable guarantee) and
+  bitwise equality only for repeated identical calls.
+
+### D-016 (2026-10-02): `FacePipeline` and the `center` multi-face policy
+- `FacePipeline` composes detect -> select -> align -> quality gates and raises the specific
+  `FrpError` subclass for each failure. It is what the benchmarks and, in M7, the API use.
+- LFW photos are centered on the labeled person by construction, so the LFW benchmarks use the
+  `center` policy (face closest to the image center, larger wins ties) instead of `largest`,
+  which can pick a bystander. The policy is recorded in every cache manifest.
+
+### D-017 (2026-10-02): LFW preparation is a cached two-stage process
+- Stage 1 (`bench/prepare_lfw.py`) detects and aligns every image once and stores the 112x112
+  crops (about 0.5 GB, gitignored, resumable). Embeddings, quality features, fp16/fp32
+  comparisons and robustness slices all start from these crops, so the slow detector never runs
+  twice. Failures are stored with a status code and counted as errors downstream.
+- A shared downloader (`frp/download.py`) enforces the 500 MB cap while streaming (not only from
+  the `Content-Length` header) and verifies SHA-256 and md5 where available.
