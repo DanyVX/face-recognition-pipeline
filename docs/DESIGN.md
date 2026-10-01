@@ -204,3 +204,37 @@ Backends sit behind `FaceDetector` / `FaceEmbedder` protocols so they can be swa
   gate in 60/60 datasets and enabled a spurious gate in 5/60 (nominal 5%).
 - `aligned_from_crop` rebuilds an `AlignedFace` from a cached crop plus landmarks, so features
   that need the transform (pose) can be computed without the source image.
+
+### D-023 (2026-10-02): benchmark architecture and protocol conventions
+- **Staged and cached.** `prepare_lfw` (detect + align every image once, store crops and
+  metadata), `embed_lfw` (embed the crops), then independent evaluators read the caches. The slow
+  detector never runs twice; embeddings are keyed by model hash and preprocessing version, so a
+  model change cannot silently reuse stale vectors. Caches live in the gitignored `data/` because
+  they contain face crops and embeddings.
+- **Verification** follows the standard LFW 10-fold protocol: the threshold of each fold is chosen
+  on the other nine folds and applied to the held-out fold; accuracy is reported as mean +/- std
+  over folds. Folds are checked for identity and image leakage (LFW's are identity-disjoint).
+- **Failures are never dropped.** For accuracy a failed pair is an error whatever its label. For
+  TAR/FAR/EER the ISO/IEC 19795-1 convention is used (a failed genuine pair is a false rejection;
+  failed impostor pairs are not false accepts) and failure counts are printed beside every
+  number. A failure-aware EER (failed impostors as false accepts) is reported as well.
+- **FAR resolution.** The standard protocol has 3000 impostor pairs, so FAR below about 3.3e-4 is
+  not measurable there. TAR@FAR=1e-4 is therefore reported from an *extended* impostor set built
+  from every cross-identity image pair (about 87 million, accumulated in a 200 000-bin histogram,
+  thresholds from training identities and FAR measured on held-out identities). It is labelled
+  non-standard everywhere it appears.
+- **Open set** runs through the real `Gallery` service: half of the eligible identities are
+  enrolled, the rest and all small identities are strangers; FNIR at fixed FPIR and the DET curve
+  are reported next to closed-set rank-1, with a resolvability flag when too few strangers exist
+  for a target FPIR. Several seeded splits give mean and std.
+- **Robustness** degrades only the probe image of a seeded pair sample (validation sample from
+  folds 0-1, held-out sample from folds 2-9) and runs the whole pipeline; the decision threshold
+  is fixed from clean validation pairs. Samples are small by design and the report shows Wilson
+  intervals.
+- **Quality calibration** uses cross-fitted out-of-fold gain with a Bonferroni-corrected bootstrap
+  CI (see D-022) on a validation set of clean pairs plus degraded probes, then a single
+  held-out evaluation. A gate with no certified gain stays disabled.
+- **Metrics are tested against brute-force references**, including ties; writing those tests
+  caught two real bugs (EER crossing direction, ties in the best-threshold search).
+- **Reporting** (`bench/report.py`) only formats numbers found in `results/*.json`; missing
+  results print `TBD (not yet measured)`.
