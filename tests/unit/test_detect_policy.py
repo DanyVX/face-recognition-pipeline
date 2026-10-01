@@ -55,3 +55,22 @@ def test_detect_in_original_space_undoes_downscaling() -> None:
     )
     (found,) = detect_in_original_space(Fixed(), loaded)
     np.testing.assert_allclose(found.box, [40, 80, 200, 240])
+
+
+def test_center_policy_picks_the_face_nearest_the_image_center() -> None:
+    background = face((10, 10, 110, 130), score=0.99)  # large and high-scoring, but off to the side
+    central = face((180, 90, 260, 200), score=0.70)  # smaller, but in the middle of a 300x440 image
+    (chosen,) = select_faces([background, central], FacePolicy.CENTER, image_shape=(300, 440))
+    assert chosen is central
+
+
+def test_center_policy_breaks_ties_by_area() -> None:
+    small = face((100, 100, 120, 120))
+    big = face((90, 90, 130, 130))  # same center
+    (chosen,) = select_faces([small, big], FacePolicy.CENTER, image_shape=(220, 220))
+    assert chosen is big
+
+
+def test_center_policy_requires_the_image_shape() -> None:
+    with pytest.raises(ValueError, match="image_shape"):
+        select_faces([SMALL], FacePolicy.CENTER)

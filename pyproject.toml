@@ -56,7 +56,7 @@ select = ["B", "C4", "E", "F", "I", "PTH", "RUF", "S", "SIM", "UP", "W"]
 [tool.mypy]
 strict = true
 plugins = ["pydantic.mypy"]
-files = ["src", "tests", "scripts"]
+files = ["src", "tests", "scripts", "bench"]
 
 [[tool.mypy.overrides]]
 module = ["onnxruntime", "onnxruntime.*"]

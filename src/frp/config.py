@@ -33,6 +33,9 @@ class Settings(BaseSettings):
     min_face_px: int = Field(20, ge=1)
     max_faces: int = Field(10, ge=1)
 
+    # Embedding: faces per inference call (bounds memory for large batches).
+    embed_max_batch: int = Field(16, ge=1)
+
     # ONNX Runtime. Providers are tried in order; unavailable ones fall back to CPU with a log line.
     onnx_providers: str = "CUDAExecutionProvider,CPUExecutionProvider"
     onnx_threads: int | None = Field(None, ge=1)  # None = ORT default (all cores)

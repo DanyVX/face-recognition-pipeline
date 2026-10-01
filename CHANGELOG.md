@@ -17,3 +17,9 @@ All notable changes to this project are documented here. Format follows
   proxies and a pose quality gate, and `frp debug-align` overlay tool (M2).
 - Detection settings (`DET_MIN_CONFIDENCE`, `MIN_FACE_PX`, `MAX_FACES`, `ONNX_PROVIDERS`,
   `ONNX_THREADS`) (M2).
+
+- `FaceEmbedder` protocol and ArcFace backend: batched, chunked, L2-normalized, deterministic,
+  version-tagged embeddings; mixing model versions is refused (M3).
+- `FacePipeline` (detect, select, align, gates), `center` multi-face policy, LFW downloader and
+  pair parser, shared size-capped downloader, benchmark result writer and LFW preparation
+  stage (M3).
