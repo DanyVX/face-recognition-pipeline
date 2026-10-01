@@ -1,0 +1,73 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "face-recognition-pipeline"
+dynamic = ["version"]
+description = "Benchmarked face recognition pipeline: detect, align, embed, index, verify, identify."
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.11"
+dependencies = [
+    "psutil>=5.9",
+    "pydantic>=2.7",
+    "pydantic-settings>=2.3",
+    "typer>=0.12",
+]
+
+[project.scripts]
+frp = "frp.cli:app"
+
+[dependency-groups]
+dev = [
+    "hypothesis>=6.100",
+    "mypy>=1.10",
+    "pip-audit>=2.7",
+    "pre-commit>=3.7",
+    "pytest>=8.2",
+    "pytest-cov>=5.0",
+    "ruff>=0.5",
+    "types-psutil>=5.9",
+]
+
+[tool.hatch.version]
+path = "src/frp/__init__.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/frp"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests", "scripts", "bench"]
+
+[tool.ruff.lint]
+select = ["B", "C4", "E", "F", "I", "PTH", "RUF", "S", "SIM", "UP", "W"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101"]
+
+[tool.mypy]
+strict = true
+plugins = ["pydantic.mypy"]
+files = ["src", "tests", "scripts"]
+python_version = "3.11"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--strict-markers -m 'not slow and not gpu'"
+filterwarnings = ["error"]
+markers = [
+    "slow: slow tests, skipped by default (run with -m slow)",
+    "gpu: tests that need a GPU, skipped by default (run with -m gpu)",
+]
+
+[tool.coverage.run]
+source = ["frp"]
+branch = true
+
+[tool.coverage.report]
+fail_under = 70
+show_missing = true
