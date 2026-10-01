@@ -5,6 +5,7 @@ from frp.align.aligner import (
     ARCFACE_TEMPLATE,
     AlignedFace,
     align_face,
+    aligned_from_crop,
     apply_transform,
     estimate_similarity,
 )
@@ -14,6 +15,7 @@ __all__ = [
     "ARCFACE_TEMPLATE",
     "AlignedFace",
     "align_face",
+    "aligned_from_crop",
     "apply_transform",
     "estimate_similarity",
 ]
