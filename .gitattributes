@@ -1,0 +1,18 @@
+# Normalize line endings; Git decides based on content
+* text=auto
+
+# Always LF for scripts and config that run across platforms
+*.py text eol=lf
+*.sh text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.toml text eol=lf
+Makefile text eol=lf
+Dockerfile text eol=lf
+
+# Binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.onnx binary

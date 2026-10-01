@@ -1,0 +1,52 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+
+# Tooling caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.hypothesis/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+
+# Secrets and local config (never commit)
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Sensitive / large artifacts (never commit: datasets, weights, biometrics)
+data/
+datasets/
+models/
+*.onnx
+*.pt
+*.pth
+*.faiss
+*.index
+*.npy
+*.npz
+*.db
+*.sqlite
+*.sqlite3
+.cache/
+
+# Notebooks (outputs may contain personal data)
+.ipynb_checkpoints/
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
