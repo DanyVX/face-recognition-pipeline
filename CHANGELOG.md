@@ -23,3 +23,8 @@ All notable changes to this project are documented here. Format follows
 - `FacePipeline` (detect, select, align, gates), `center` multi-face policy, LFW downloader and
   pair parser, shared size-capped downloader, benchmark result writer and LFW preparation
   stage (M3).
+
+- Versioned, checksummed, atomically written vector index with Flat, HNSW and IVF-Flat backends;
+  SQLite identity store with model-tagged embeddings; gallery service with enroll, verify,
+  identify, delete, update, list, duplicate-identity policy and locking; index scaling
+  benchmark (M4).

@@ -61,3 +61,35 @@ pose, mirrored landmark order, NaN landmarks) are covered by tests; none are lis
 - GPU execution (CUDA provider) has not been run; only the CPU fallback path is exercised.
 - fp16 vs fp32: a probe on random input gave cosine 0.999997 (4 samples, not a result). The real
   measurement on LFW crops is `bench/precision.py` (M6); until then there is no fp16 claim.
+
+## M4 (index and search): limits and conventions
+- **Deletion cost:** removing a vector invalidates the FAISS structure; the next search rebuilds
+  it. Cheap for Flat, expensive for HNSW/IVF at 100k vectors (see `docs/RESULTS.md` once
+  measured). A production system would use tombstones or an index that deletes natively.
+- **Memory:** the master vectors and the FAISS structure are both held in RAM (roughly 2x the
+  raw vectors for Flat; more for HNSW). Galleries larger than RAM are out of scope.
+- **Single process:** the lock and SQLite connection serve one process. Running several API
+  workers against one store is not supported.
+- **Serialized searches:** all gallery operations take one lock, so concurrent searches do not run
+  in parallel at the Python level (FAISS still uses its OpenMP threads inside a search).
+- **ANN determinism:** HNSW construction with several threads, and IVF k-means, can give slightly
+  different structures run to run; approximate results are not guaranteed identical across
+  rebuilds. The exact (Flat) backend is deterministic.
+- **Placeholders:** the duplicate-detection threshold and the default `max` aggregation are not
+  yet derived from data (M6).
+- Scaling beyond 100k vectors was not tested.
+
+### Spec edge cases for M4 and where they are tested
+| Edge case | Test |
+|---|---|
+| Enroll the same person twice | `test_same_person_under_two_identities_is_reported_by_default`, `..._reject_policy_...` |
+| Enroll with no detectable face | `tests/unit/test_pipeline.py::test_no_face_raises` (pipeline stage) |
+| Empty gallery search; k > gallery size | `test_empty_gallery_search_*`, `test_k_larger_than_the_gallery_*` |
+| Delete then search, also after persist/reload | `test_removed_vectors_are_never_returned`, `test_deleted_vectors_stay_deleted_after_save_and_reload`, `test_delete_then_reload_still_gone` |
+| Concurrent enroll + search; delete during search | `test_concurrent_*`, `test_identity_deleted_while_being_verified_*` |
+| Corrupted / partially written index; atomic write; checksum | `tests/unit/test_index_format.py` (truncation, bit flips, failed rename, failed write) |
+| Dimension mismatch; mixed model versions | `test_dimension_mismatch_cannot_be_constructed`, `test_mixing_model_versions_is_blocked_*`, `test_opening_a_store_with_another_model_version_is_refused` |
+| Identity id collisions | `test_identity_id_collision_is_an_error`, `test_enroll_with_a_chosen_id_and_collision_handling` |
+| Unicode and very long names | `test_unicode_names_are_accepted`, `test_name_length_boundary`, `test_unicode_and_long_names_work_end_to_end` |
+| Index format versioning | `test_unknown_format_version_is_refused_explicitly` (+ container and schema version tests) |
+| Identical image under two identities; threshold boundary; NaN similarity; unnormalized vectors | `test_identical_image_enrolled_under_two_identities_*`, `test_verify_boundary_is_inclusive`, `test_verify_errors`, `test_unnormalized_and_nan_vectors_are_refused` |
