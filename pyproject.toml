@@ -11,6 +11,10 @@ license = "MIT"
 license-files = ["LICENSE"]
 requires-python = ">=3.11"
 dependencies = [
+    "numpy>=2.4.6",
+    "onnxruntime>=1.30.0",
+    "opencv-python-headless>=5.0.0.93",
+    "pillow>=12.3.0",
     "psutil>=5.9",
     "pydantic>=2.7",
     "pydantic-settings>=2.3",
@@ -53,7 +57,10 @@ select = ["B", "C4", "E", "F", "I", "PTH", "RUF", "S", "SIM", "UP", "W"]
 strict = true
 plugins = ["pydantic.mypy"]
 files = ["src", "tests", "scripts"]
-python_version = "3.11"
+
+[[tool.mypy.overrides]]
+module = ["onnxruntime", "onnxruntime.*"]
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -71,3 +78,6 @@ branch = true
 [tool.coverage.report]
 fail_under = 70
 show_missing = true
+
+[tool.uv]
+link-mode = "copy"
