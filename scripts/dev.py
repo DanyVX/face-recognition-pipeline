@@ -65,9 +65,53 @@ def test_fast() -> int:
     return _uv("run", "pytest", "-x", "-q")
 
 
+def _bench_module(module: str, *args: str) -> Callable[[], int]:
+    return lambda: _uv("run", "python", "-m", module, *args)
+
+
+def _first_failure_steps(steps: list[Callable[[], int]]) -> int:
+    return _first_failure(*steps)
+
+
 def bench() -> int:
-    print("No benchmarks yet: they arrive in M6.", file=sys.stderr)
-    return 2
+    """Full benchmark suite (needs `data/lfw` and the models; takes hours on a CPU laptop).
+
+    Download first: ``uv run python scripts/download_models.py`` and
+    ``uv run python scripts/download_lfw.py``. Every step is resumable.
+    """
+    modules = (
+        "bench.prepare_lfw",
+        "bench.embed_lfw",
+        "bench.lfw_verification",
+        "bench.open_set",
+        "bench.index_scaling",
+        "bench.latency",
+        "bench.precision",
+        "bench.robustness",
+        "bench.calibrate_quality",
+        "bench.report",
+    )
+    return _first_failure_steps([_bench_module(m) for m in modules])
+
+
+def bench_smoke() -> int:
+    """Tiny benchmark path that finishes in minutes and never overwrites real results.
+
+    Always runs the synthetic index benchmark; when LFW and the models are present it also runs a
+    reduced LFW verification (the first 15 pairs per class per fold).
+    """
+    steps: list[Callable[[], int]] = [
+        _bench_module("bench.index_scaling", "--tiny", "--name", "smoke_index_scaling")
+    ]
+    if (ROOT / "data" / "lfw" / "lfw").is_dir() and (ROOT / "models" / "det_10g.onnx").is_file():
+        steps += [
+            _bench_module("bench.prepare_lfw", "--limit", "15"),
+            _bench_module("bench.embed_lfw", "--limit", "15"),
+            _bench_module(
+                "bench.lfw_verification", "--limit", "15", "--no-extended", "--name", "smoke_lfw"
+            ),
+        ]
+    return _first_failure_steps(steps)
 
 
 def run() -> int:
@@ -108,6 +152,7 @@ TASKS: dict[str, Callable[[], int]] = {
     "test": test,
     "test-fast": test_fast,
     "bench": bench,
+    "bench-smoke": bench_smoke,
     "run": run,
     "docker-build": docker_build,
     "clean": clean,

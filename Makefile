@@ -2,7 +2,7 @@
 #   uv run python scripts/dev.py <task>
 # Requires uv (https://docs.astral.sh/uv/).
 RUN := uv run --no-project python scripts/dev.py
-TASKS := setup lint format typecheck test test-fast bench run docker-build clean
+TASKS := setup lint format typecheck test test-fast bench bench-smoke run docker-build clean
 
 .PHONY: $(TASKS) help
 help:

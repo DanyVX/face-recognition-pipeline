@@ -53,3 +53,6 @@ desktop.ini
 
 # Throwaway local scripts
 .scratch/
+
+# Smoke-run outputs (never committed)
+results/smoke_*.json
