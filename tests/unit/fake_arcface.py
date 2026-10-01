@@ -24,7 +24,11 @@ class FakeInput:
 
 
 class FakeArcFaceSession:
-    """Embedding = fixed random projection of an 8x8 average-pooled copy of the input."""
+    """Embedding = fixed random projection of an 8x8 average-pooled copy of the input.
+
+    Different images give nearly orthogonal embeddings; the same image with small noise stays
+    close, so the fake is discriminative like a (very bad) real model.
+    """
 
     def __init__(self, *, delay: float = 0.0, output: NDArray[np.float32] | None = None) -> None:
         self._w = np.random.default_rng(1234).normal(size=(3 * 8 * 8, DIM)).astype(np.float32)
@@ -48,4 +52,4 @@ class FakeArcFaceSession:
             return [self._forced[: blob.shape[0]]]
         n = blob.shape[0]
         pooled = blob.reshape(n, 3, 8, 14, 8, 14).mean(axis=(3, 5)).reshape(n, -1)
-        return [pooled @ self._w + 0.1]
+        return [pooled @ self._w]

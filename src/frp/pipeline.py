@@ -43,11 +43,12 @@ class FacePipeline:
         self.gates = tuple(gates)
         self.allow_outside_landmarks = allow_outside_landmarks
 
-    def prepare(self, loaded: LoadedImage) -> PreparedFace:
+    def prepare(self, loaded: LoadedImage, policy: FacePolicy | None = None) -> PreparedFace:
+        """Detect, select (``policy`` overrides the default), align and run the quality gates."""
         image = loaded.array
         shape = (int(image.shape[0]), int(image.shape[1]))
         faces = self.detector.detect(image)
-        (chosen,) = select_faces(faces, self.policy, image_shape=shape)
+        (chosen,) = select_faces(faces, policy or self.policy, image_shape=shape)
         aligned = align_face(image, chosen.landmarks, allow_outside=self.allow_outside_landmarks)
         ctx = GateContext(face=chosen, aligned=aligned, image_shape=shape)
         results = tuple(gate.check(ctx) for gate in self.gates)
