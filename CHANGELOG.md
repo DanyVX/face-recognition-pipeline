@@ -13,3 +13,7 @@ All notable changes to this project are documented here. Format follows
   bounded downscaling with coordinate mapping (M1).
 - `FaceDetector` protocol and SCRFD backend (boxes, 5 landmarks, confidence), multi-face policy,
   checksum-verified model downloader (M1).
+- 5-point similarity alignment to the 112x112 ArcFace template with strict input guards, pose
+  proxies and a pose quality gate, and `frp debug-align` overlay tool (M2).
+- Detection settings (`DET_MIN_CONFIDENCE`, `MIN_FACE_PX`, `MAX_FACES`, `ONNX_PROVIDERS`,
+  `ONNX_THREADS`) (M2).
