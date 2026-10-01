@@ -7,20 +7,19 @@ not against a bad first download. See MODEL_CARD.md for license terms of each mo
 
 from __future__ import annotations
 
-import hashlib
 import logging
 import shutil
-import urllib.request
 import zipfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
 
+from frp.download import MAX_DOWNLOAD_BYTES, download, file_digest
 from frp.errors import ModelFileError
 
 logger = logging.getLogger(__name__)
 
-MAX_DOWNLOAD_BYTES: Final = 500 * 1024 * 1024  # CLAUDE.md: ask before downloading more than this
+__all__ = ["MAX_DOWNLOAD_BYTES", "MODELS", "ModelSpec", "ensure_model", "sha256_of"]
 
 
 @dataclass(frozen=True)
@@ -67,21 +66,7 @@ MODELS: Final[dict[str, ModelSpec]] = {
 
 
 def sha256_of(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        while block := handle.read(1 << 20):
-            digest.update(block)
-    return digest.hexdigest()
-
-
-def _download(url: str, dest: Path, expected_size: int) -> None:
-    if expected_size > MAX_DOWNLOAD_BYTES:
-        msg = f"{url} is {expected_size:,} bytes, above the 500 MB limit; ask before downloading."
-        raise ModelFileError(msg)
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    request = urllib.request.Request(url, headers={"User-Agent": "frp-model-downloader"})  # noqa: S310
-    with urllib.request.urlopen(request, timeout=60) as response, dest.open("wb") as out:  # noqa: S310
-        shutil.copyfileobj(response, out, 1 << 20)
+    return file_digest(path, "sha256")
 
 
 def ensure_model(spec: ModelSpec, models_dir: Path, *, force: bool = False) -> Path:
@@ -97,7 +82,13 @@ def ensure_model(spec: ModelSpec, models_dir: Path, *, force: bool = False) -> P
     artifact = staging / Path(spec.url).name
     try:
         logger.info("downloading %s (%s bytes)", spec.url, f"{spec.size_bytes:,}")
-        _download(spec.url, artifact, spec.size_bytes)
+        if spec.size_bytes > MAX_DOWNLOAD_BYTES:
+            msg = (
+                f"{spec.url} is {spec.size_bytes:,} bytes, above the 500 MB limit; "
+                "ask before downloading."
+            )
+            raise ModelFileError(msg)
+        download(spec.url, artifact)
         if spec.download_sha256 is not None and sha256_of(artifact) != spec.download_sha256:
             msg = f"Downloaded archive for {spec.key} failed its checksum; refusing to use it."
             raise ModelFileError(msg)
