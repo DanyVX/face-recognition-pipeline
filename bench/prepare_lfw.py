@@ -96,7 +96,7 @@ def main(argv: list[str] | None = None) -> int:
             fields[key] = saved[key]
 
     pipeline = FacePipeline(build_detector(), policy=FacePolicy.CENTER)
-    started, t_last = time.perf_counter(), time.perf_counter()
+    started, t_last, i_last = time.perf_counter(), time.perf_counter(), done
     for i in range(done, n):
         try:
             loaded = load_image(paths[i].read_bytes())
@@ -122,8 +122,8 @@ def main(argv: list[str] | None = None) -> int:
             np.savez(meta_path, **fields)
             write_json_atomic(progress_path, {"n": n, "done": i + 1})
             now = time.perf_counter()
-            rate = 250 / max(now - t_last, 1e-9)
-            t_last = now
+            rate = (i + 1 - i_last) / max(now - t_last, 1e-9)
+            t_last, i_last = now, i + 1
             remaining = (n - i - 1) / max(rate, 1e-9)
             log.info("%d/%d  %.1f img/s  ~%.0f min left", i + 1, n, rate, remaining / 60)
     elapsed = time.perf_counter() - started
