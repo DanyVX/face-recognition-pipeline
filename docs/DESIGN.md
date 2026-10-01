@@ -183,3 +183,24 @@ Backends sit behind `FaceDetector` / `FaceEmbedder` protocols so they can be swa
   rejecting control characters, lone surrogates and bidirectional override characters.
 - One re-entrant lock serializes all gallery operations: simple, and an identity deleted during
   a search is either fully visible or fully gone.
+
+### D-022 (2026-10-02): quality gates, thresholds and calibration
+- Gates: size, detector confidence (occlusion proxy), framing (face cut off by the frame),
+  sharpness (variance of the Laplacian of the *aligned 112x112 crop*, so values are comparable
+  across source resolutions), exposure (brightness window and minimum contrast) and pose. Every
+  gate returns a `GateResult` with a stable reason code (`FACE_TOO_SMALL`, `LOW_CONFIDENCE`,
+  `FACE_CUT_OFF`, `BLURRY`, `TOO_DARK`, `TOO_BRIGHT`, `LOW_CONTRAST`, `POSE_YAW`, `POSE_PITCH`,
+  `POSE_ROLL`). `assess` runs all enabled gates so every failing reason is reported at once.
+- A threshold of `None` disables a check. Built-in defaults are lenient and PROVISIONAL, and
+  sharpness has no default at all (there is no sensible value before calibration). Calibrated
+  values load from a JSON file (`QualityThresholds.load`), which `bench/calibrate_quality.py`
+  writes.
+- Calibration method (details and results in `docs/RESULTS.md`): one fixed decision threshold
+  from clean validation pairs; a validation set of clean pairs plus degraded probes; per gate,
+  the threshold with the best accuracy gain within a reject budget, **kept only if cross-fitted
+  out-of-fold gain is significant after a Bonferroni correction across gates**; one evaluation on
+  held-out folds. Cross-fitting matters: bootstrapping the gain of the best of many thresholds on
+  the same sample is optimistically biased. In simulation the procedure found the one informative
+  gate in 60/60 datasets and enabled a spurious gate in 5/60 (nominal 5%).
+- `aligned_from_crop` rebuilds an `AlignedFace` from a cached crop plus landmarks, so features
+  that need the transform (pose) can be computed without the source image.

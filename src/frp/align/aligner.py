@@ -108,6 +108,33 @@ def apply_transform(
     return pts @ np.asarray(matrix, dtype=np.float64)[:, :2].T + np.asarray(matrix)[:, 2]
 
 
+def _fit(
+    points: NDArray[np.float64],
+) -> tuple[NDArray[np.float64], NDArray[np.float64], float]:
+    """Similarity transform for ``points``, the mapped points, and the relative fit error."""
+    matrix = estimate_similarity(points)
+    mapped = apply_transform(matrix, points)
+    residual = float(np.sqrt(((mapped - ARCFACE_TEMPLATE) ** 2).sum(axis=1).mean()))
+    return matrix, mapped, residual / _TEMPLATE_IOD
+
+
+def aligned_from_crop(crop: NDArray[np.uint8], landmarks: NDArray[np.floating]) -> AlignedFace:
+    """Rebuild an :class:`AlignedFace` from an already-aligned ``crop`` and the source landmarks.
+
+    Used when crops are cached: the transform is recomputed (deterministically) from the landmarks,
+    so features that need the matrix or mapped landmarks (pose) do not require the source image.
+    """
+    if crop.shape != (ALIGNED_SIZE, ALIGNED_SIZE, 3) or crop.dtype != np.uint8:
+        raise ValueError(f"crop must be uint8 of shape ({ALIGNED_SIZE}, {ALIGNED_SIZE}, 3)")
+    matrix, mapped, fit_error = _fit(_validate(landmarks))
+    return AlignedFace(
+        image=np.ascontiguousarray(crop),
+        matrix=matrix,
+        landmarks=mapped.astype(np.float32),
+        fit_error=fit_error,
+    )
+
+
 def align_face(
     image: NDArray[np.uint8],
     landmarks: NDArray[np.floating],
@@ -142,10 +169,7 @@ def align_face(
             OUT_OF_IMAGE,
         )
 
-    matrix = estimate_similarity(points)
-    mapped = apply_transform(matrix, points)
-    residual = float(np.sqrt(((mapped - ARCFACE_TEMPLATE) ** 2).sum(axis=1).mean()))
-    fit_error = residual / _TEMPLATE_IOD
+    matrix, mapped, fit_error = _fit(points)
     if fit_error > max_fit_error:
         raise InvalidLandmarksError(
             f"Landmarks do not form a face-like layout (fit error {fit_error:.2f} > "

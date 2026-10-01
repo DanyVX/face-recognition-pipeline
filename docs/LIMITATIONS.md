@@ -93,3 +93,17 @@ pose, mirrored landmark order, NaN landmarks) are covered by tests; none are lis
 | Unicode and very long names | `test_unicode_names_are_accepted`, `test_name_length_boundary`, `test_unicode_and_long_names_work_end_to_end` |
 | Index format versioning | `test_unknown_format_version_is_refused_explicitly` (+ container and schema version tests) |
 | Identical image under two identities; threshold boundary; NaN similarity; unnormalized vectors | `test_identical_image_enrolled_under_two_identities_*`, `test_verify_boundary_is_inclusive`, `test_verify_errors`, `test_unnormalized_and_nan_vectors_are_refused` |
+
+## M5 (quality gates): limits
+- The built-in thresholds are lenient defaults, not calibrated values; until
+  `results/quality_thresholds.json` is produced and loaded, the gates are a coarse safety net.
+- Pose gating uses geometric proxies from five landmarks (nose offset, nose position between the
+  eye and mouth lines). They are not calibrated angles, and landmark error limits their accuracy
+  (see the 180-degree observation in the M2 section).
+- The occlusion check is only detector confidence plus the framing check; there is no occlusion
+  segmentation, so masks, sunglasses and hands over the face are handled only to the extent they
+  lower the detector score or the embedding similarity.
+- Calibrated thresholds describe LFW-like images plus the synthetic degradations in
+  `bench/degrade.py`; they may not transfer to other cameras or populations.
+- Rejecting low-quality faces is a trade-off, not a free improvement: every gate has a reject
+  rate, reported next to its accuracy gain.
