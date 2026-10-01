@@ -96,3 +96,59 @@ class ModelMismatchError(FrpError):
 
     code = "MODEL_MISMATCH"
     http_status = 409
+
+
+# --- index / store / identities ----------------------------------------------------------------
+
+
+class VectorIndexError(FrpError):
+    """Base for vector-index problems."""
+
+    code = "INDEX_ERROR"
+
+
+class IndexCorruptError(VectorIndexError):
+    """An index file is truncated, tampered with, or internally inconsistent."""
+
+    code = "INDEX_CORRUPT"
+
+
+class IndexVersionError(VectorIndexError):
+    """An index file uses a format version this build cannot read."""
+
+    code = "INDEX_VERSION_UNSUPPORTED"
+
+
+class DuplicateIdError(VectorIndexError):
+    """A vector id was added twice."""
+
+    code = "DUPLICATE_VECTOR_ID"
+    http_status = 409
+
+
+class InvalidIdentityError(FrpError):
+    """An identity id or name failed validation."""
+
+    code = "INVALID_IDENTITY"
+    http_status = 422
+
+
+class IdentityNotFoundError(FrpError):
+    code = "IDENTITY_NOT_FOUND"
+    http_status = 404
+
+
+class IdentityExistsError(FrpError):
+    code = "IDENTITY_EXISTS"
+    http_status = 409
+
+
+class DuplicateIdentityError(FrpError):
+    """The face is already enrolled under a different identity (policy: reject)."""
+
+    code = "DUPLICATE_IDENTITY"
+    http_status = 409
+
+    def __init__(self, message: str, matches: tuple[tuple[str, float], ...] = ()) -> None:
+        super().__init__(message)
+        self.matches = matches  # (identity_id, similarity)
