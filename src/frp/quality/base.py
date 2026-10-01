@@ -30,6 +30,7 @@ class GateContext:
 
 
 class Gate(Protocol):
-    name: str
+    @property
+    def name(self) -> str: ...
 
     def check(self, ctx: GateContext) -> GateResult: ...

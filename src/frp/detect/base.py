@@ -76,14 +76,36 @@ class FacePolicy(StrEnum):
     """What to do when an image contains more than one face."""
 
     LARGEST = "largest"  # keep only the largest face (by box area)
+    CENTER = "center"  # keep only the face closest to the image center (needs image_shape)
     ALL = "all"  # keep every face
     REJECT = "reject"  # raise MultipleFacesError
 
 
-def select_faces(faces: list[Face], policy: FacePolicy = FacePolicy.LARGEST) -> list[Face]:
-    """Apply the multi-face policy. Raises ``NoFaceError`` if ``faces`` is empty."""
+def select_faces(
+    faces: list[Face],
+    policy: FacePolicy = FacePolicy.LARGEST,
+    image_shape: tuple[int, int] | None = None,
+) -> list[Face]:
+    """Apply the multi-face policy. Raises ``NoFaceError`` if ``faces`` is empty.
+
+    ``image_shape`` is (height, width) of the image the faces were detected in; it is required
+    for ``FacePolicy.CENTER``.
+    """
     if not faces:
         raise NoFaceError("No face detected.")
+    if policy is FacePolicy.CENTER:
+        if image_shape is None:
+            raise ValueError("FacePolicy.CENTER needs image_shape=(height, width)")
+        cx, cy = image_shape[1] / 2.0, image_shape[0] / 2.0
+
+        def distance(face: Face) -> tuple[float, float]:
+            fx, fy = (face.box[0] + face.box[2]) / 2.0, (face.box[1] + face.box[3]) / 2.0
+            return (
+                float(np.hypot(fx - cx, fy - cy)),
+                -face.area,
+            )  # nearest first, larger wins ties
+
+        return [min(faces, key=distance)]
     if policy is FacePolicy.ALL:
         return sorted(faces, key=lambda f: f.area, reverse=True)
     if policy is FacePolicy.REJECT and len(faces) > 1:
