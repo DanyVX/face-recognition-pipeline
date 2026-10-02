@@ -187,3 +187,38 @@ See `docs/THREAT_MODEL.md` for the threat-by-threat view; the items below are th
   has run on GitHub, treat them as untested. Required system library (`libgomp1`) and the pinned
   `uv` image tag are likewise unverified.
 - **Encryption performance** was not benchmarked separately; startup decrypts every embedding.
+
+## M6 (benchmarks): observations, caveats and what was not measured
+All numbers are in `docs/RESULTS.md` (generated from `results/*.json`). Caveats that belong next to them:
+- **Provenance is dirty.** Every result file records `dirty: true` (the working tree had uncommitted
+  changes when it ran) and the latency/index files record the commit just before the M8 docs.
+  They were produced by the scripts in `bench/`, but a clean-tree re-run was not done.
+- **fp16 vs fp32 was not measured** (`TBD`). `bench/precision.py` needs a second full embedding pass
+  at roughly 4-5 images/s on this CPU (about 45 minutes for all LFW crops) and was skipped for time.
+  A `--limit` subset run was attempted; its preparation alone took about 40 minutes, so it was
+  abandoned. No fp16 number is claimed anywhere.
+- **Index scaling stops at 10,000 vectors.** The HNSW build at 100,000 vectors did not finish in
+  several minutes on this 8 GB machine, so the run used `--sizes 1000,10000`. Flat search latency at
+  100,000 comes from `bench.latency`. HNSW build at 10,000 vectors already takes about 15 s with the
+  current parameters; the delete-then-rebuild path costs the same.
+- **Timing noise.** CPU latency was measured on a busy laptop (other processes and background doc
+  work were running; free RAM was often under 1 GB). Treat p50/p95 as indicative, not as a clean
+  benchmark. No GPU was available, so GPU latency is `TBD`.
+- **Occlusion collapses accuracy:** held-out accuracy is 96.0% at a 10% occlusion patch, 66.5% at 20%,
+  31.0% at 30% and 9.5% at 40%. Failed detections count as errors, and the failure rate at 20/30/40%
+  is 29% / 63% / 85%; the split between detection failures and wrong matches was not analysed.
+  Masks and large occluders are not handled.
+- **Robustness samples are small** (200 validation and 200 test pairs per setting): differences
+  of a few points are not significant, and most settings are unchanged from clean by construction
+  of the samples. Degradations are synthetic proxies, not real cameras.
+- **The detection-score gate has a cost:** the calibrated quality gates reject 11.87% of held-out
+  pairs (accuracy of kept pairs 99.58% vs 99.14% for all pairs), including clean ones.
+- **Extended-impostor TAR** at FAR 1e-4 uses every cross-identity pair and is not part of the standard
+  LFW protocol; it is labelled as such everywhere.
+- **LFW is near-saturated and its demographic make-up is not representative** (it is a set of
+  public figures; its composition was not measured here). 99.5% on LFW says nothing about fairness
+  or real-world KYC conditions; no demographic or cross-pose/age benchmark was run.
+- **Default thresholds are still provisional.** `VERIFY_THRESHOLD`/`IDENTIFY_THRESHOLD` default to
+  0.4 and `DUPLICATE_THRESHOLD` to 0.6 for this model. The LFW operating point measured from clean
+  validation pairs was about 0.22 (see RESULTS). The higher defaults lean toward fewer false accepts
+  at the cost of more false rejects. Choose thresholds on your own data.
