@@ -1,0 +1,34 @@
+# Demo / local-development stack. Written without Docker available on the dev machine; the CI
+# `docker` job builds the image, but this file has not been run end to end (see docs/LIMITATIONS.md).
+#
+#   docker compose up --build
+#   docker compose exec frp frp keys create --name demo     # prints an API key once
+#
+# The encryption key file is generated on first start INTO the keys volume because
+# ALLOW_KEY_GENERATION=true. That is for the demo only: a key stored next to the data does not
+# protect against theft of the host. For anything real, supply ENCRYPTION_KEYS from a secret store.
+services:
+  frp:
+    build: .
+    image: frp:dev
+    ports:
+      - "127.0.0.1:8000:8000" # bound to loopback; put a TLS-terminating proxy in front to expose
+    environment:
+      ENCRYPTION_KEY_FILE: /keys/keys.json
+      ALLOW_KEY_GENERATION: "true"
+    volumes:
+      - frp-data:/data
+      - frp-models:/models
+      - frp-keys:/keys
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+
+volumes:
+  frp-data:
+  frp-models:
+  frp-keys:
