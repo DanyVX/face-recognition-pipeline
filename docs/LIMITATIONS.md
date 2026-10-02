@@ -16,7 +16,31 @@ reason. Updated every milestone. Currently only limitations known from the desig
   are TBD (not yet measured) unless run on Colab/Kaggle.
 
 ## Edge cases not covered
-None recorded yet (no milestone with edge cases has been implemented).
+The full spec-to-test map is `docs/EDGE_CASES.md`. These spec edge cases have **no test**, each
+for the reason given (the per-milestone sections below list the ones that are tested):
+- **Twins, siblings, look-alikes:** no labeled data available or licensed, so the expected false
+  accepts are not measured. (A synthetic look-alike test exists only for the open-set metric.)
+- **Aging:** needs AgeDB-30 or similar; access terms unverified, not obtained.
+- **Heavy makeup, children, backlight:** no labeled data; no fixture or degradation models them.
+  LFW has few children (`DATA.md`).
+- **Real glasses, masks, beards, sunglasses, infrared-camera and real profile images:** only
+  synthetic proxies are tested (random-rectangle occlusion, grayscale decoding, pose-gate logic on
+  synthetic landmarks); no real occluder or camera data.
+- **Head tilt 90/180 degrees, embedding accuracy:** detection was observed on one portrait; the
+  robustness grid covers rotation of +/-30 degrees only.
+- **Photo-of-a-photo and a liveness interface hook:** out of scope (repo 02). The spec also asks
+  for a clean hook; none exists in `src/frp` beyond the quality-gate chain.
+- **Float precision across platforms, CPUs, ONNX Runtime versions and GPU:** bitwise determinism was
+  observed on one machine only. CI is configured for Linux and Windows but nothing compares
+  embeddings across platforms.
+- **fp16 vs fp32 on LFW crops, and GPU latency:** `bench/precision.py` and the GPU rows of
+  `bench/latency.py` have not produced results (no `results/precision.json`, no GPU).
+- **LFW label noise** (known label errors) is not checked: `DATA.md` records the errata page as not
+  yet consulted. **CFP-FP / AgeDB-30** were not obtained. No subgroup or fairness evaluation.
+- **Erasure outside the application's artefacts** (unregistered backups, data-directory copies,
+  SSD remnants) and **embedding leakage in API log lines** (only the service layer is tested).
+- **Docker build, `pip-audit` result and fresh-clone quickstart timing** are unverified; no
+  second (open-license) model backend exists yet.
 
 ## M1 (detection and image loading): observations and conventions
 Observations below come from one public-domain portrait (see `DATA.md`), so they are anecdotes
