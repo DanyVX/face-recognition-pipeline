@@ -82,11 +82,15 @@ def stage_timings(
     for loaded in decoded:
         faces = detector.detect(loaded.array)
         detections.append(select_faces(faces, FacePolicy.LARGEST)[0] if faces else None)
-    usable = [(d, f) for d, f in zip(decoded, detections, strict=True) if f is not None]
-    crops = [align_face(d.array, f.landmarks).image for d, f in usable if _alignable(d, f)]
+    detected = [(d, f) for d, f in zip(decoded, detections, strict=True) if f is not None]
+    # Alignment can legitimately refuse a detection (implausible landmarks); time only the
+    # alignable ones and report how many there were.
+    usable = [(d, f) for d, f in detected if _alignable(d, f)]
+    crops = [align_face(d.array, f.landmarks).image for d, f in usable]
     return {
         "n_images": len(images),
-        "n_with_face": len(usable),
+        "n_with_face": len(detected),
+        "n_alignable": len(usable),
         "decode": percentile_stats(time_each(load_image, images, warmup)),
         "detect": percentile_stats(time_each(lambda d: detector.detect(d.array), decoded, warmup)),
         "align": percentile_stats(
