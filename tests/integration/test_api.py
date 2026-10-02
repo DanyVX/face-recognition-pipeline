@@ -163,7 +163,11 @@ async def test_enroll_identify_verify_delete_flow(tmp_path: Path) -> None:
         assert len(two.json()["faces"]) == 2
 
         deleted = await h.client.delete("/v1/identities/alice", headers=h.auth())
-        assert deleted.json() == {"identity_id": "alice", "embeddings_removed": 2}
+        assert deleted.json() == {
+            "identity_id": "alice",
+            "embeddings_removed": 2,
+            "erasure_verified": True,
+        }
         gone = await h.client.delete("/v1/identities/alice", headers=h.auth())
         assert gone.status_code == 404 and error_of(gone)["code"] == "IDENTITY_NOT_FOUND"
         after = (await h.identify(1, noise_seed=4)).json()

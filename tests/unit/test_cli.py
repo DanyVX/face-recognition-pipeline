@@ -25,8 +25,16 @@ def test_env_prints_valid_json() -> None:
 
 def test_check_config_ok(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("LOG_LEVEL", raising=False)
+    monkeypatch.setenv("ALLOW_UNENCRYPTED", "true")
     result = runner.invoke(app, ["check-config"])
     assert result.exit_code == 0
+
+
+def test_check_config_fails_without_an_encryption_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    for name in ("ENCRYPTION_KEYS", "ENCRYPTION_KEY_FILE", "ALLOW_UNENCRYPTED"):
+        monkeypatch.delenv(name, raising=False)
+    result = runner.invoke(app, ["check-config"])
+    assert result.exit_code == 2 and "No encryption key" in result.output
 
 
 def test_check_config_invalid_exits_nonzero(monkeypatch: pytest.MonkeyPatch) -> None:
