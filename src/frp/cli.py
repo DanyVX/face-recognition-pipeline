@@ -51,8 +51,10 @@ def env() -> None:
 @app.command()
 def check_config() -> None:
     """Validate configuration from the environment and exit non-zero if it is invalid."""
+    from frp.factory import build_cipher
+
     try:
-        load_settings()
+        build_cipher(load_settings())  # also fails when no encryption key is configured
     except ConfigError as exc:
         typer.echo(str(exc), err=True)
         raise typer.Exit(code=2) from exc
@@ -281,7 +283,7 @@ def list_identities(limit: int = 100, offset: int = 0) -> None:
 
 @app.command()
 def delete(identity_id: str) -> None:
-    """Delete an identity and all its embeddings from the local gallery."""
+    """Delete an identity and its embeddings from the gallery (see `erase` for complete erasure)."""
     service = build_service()
     try:
         removed = service.delete(identity_id)
@@ -290,6 +292,111 @@ def delete(identity_id: str) -> None:
     finally:
         service.close()
     _json({"identity_id": identity_id, "embeddings_removed": removed})
+
+
+@keys_app.command("generate-encryption-key")
+def keys_generate_encryption_key(
+    key_id: Annotated[str, typer.Option("--id", help="Key id (letters, digits, . _ -).")] = "k1",
+) -> None:
+    """Print a new AES-256 key as ``id:BASE64`` for ENCRYPTION_KEYS. It is not stored anywhere."""
+    from frp.crypto import KeyConfigError, format_key, generate_key, parse_keyring
+
+    key = generate_key()
+    line = format_key(key_id, key)
+    try:
+        parse_keyring(line)  # validates the id
+    except KeyConfigError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=2) from exc
+    typer.echo(line)
+
+
+@app.command("erase")
+def erase_command(
+    identity: Annotated[str, typer.Option(help="Identity id to erase completely.")],
+) -> None:
+    """Erase a person from the local data: rows, vectors, raw images, snapshots, replay, audit.
+
+    Run it while the HTTP service is stopped, or use `DELETE /v1/identities/{id}` on the running
+    service (a running process keeps its own in-memory index). Backups are not reached.
+    """
+    from frp.api.audit import SqliteAuditLog
+    from frp.api.idempotency import IdempotencyStore
+    from frp.erasure import erase_identity
+
+    settings = load_settings()
+    service = build_service()
+    audit_log = SqliteAuditLog(settings.data_dir / "audit.db") if settings.audit_enabled else None
+    idempotency = IdempotencyStore(
+        settings.data_dir / "idempotency.db", settings.idempotency_ttl_seconds
+    )
+    try:
+        report = erase_identity(
+            service, identity, idempotency=idempotency, audit_log=audit_log, actor="cli"
+        )
+    except FrpError as exc:
+        raise _fail(exc) from exc
+    finally:
+        service.close()
+        idempotency.close()
+        if audit_log is not None:
+            audit_log.close()
+    _json({**report.__dict__, "verified": report.verified})
+
+
+encryption_app = typer.Typer(help="Encryption maintenance.", no_args_is_help=True)
+app.add_typer(encryption_app, name="encryption")
+
+
+@encryption_app.command("migrate")
+def encryption_migrate() -> None:
+    """Re-seal all embeddings and registered snapshots with the ACTIVE key.
+
+    Use after rotating keys, or to encrypt a store created without encryption.
+    """
+    from frp.factory import build_cipher
+    from frp.rotation import key_usage, rotate_encryption
+    from frp.store import IdentityStore
+
+    settings = load_settings()
+    try:
+        cipher = build_cipher(settings)
+    except ConfigError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=2) from exc
+    if cipher is None:
+        typer.echo("Encryption is not configured (ALLOW_UNENCRYPTED is set).", err=True)
+        raise typer.Exit(code=2)
+    with IdentityStore(settings.db_path, cipher=cipher) as store:
+        report = rotate_encryption(store)
+        _json({**report.__dict__, "key_usage_after": key_usage(store)})
+
+
+@app.command("snapshot")
+def snapshot_command(path: Path) -> None:
+    """Save an encrypted index snapshot and register it, so erasure can reach it."""
+    service = build_service()
+    try:
+        service.gallery.save_snapshot(path)
+    finally:
+        service.close()
+    typer.echo(f"wrote and registered {path}")
+
+
+@app.command("audit")
+def audit_command(
+    identity: Annotated[str | None, typer.Option(help="Only events of this identity.")] = None,
+    limit: int = 50,
+) -> None:
+    """Show recent audit events (who did what; never biometric content)."""
+    from frp.api.audit import SqliteAuditLog
+
+    settings = load_settings()
+    log = SqliteAuditLog(settings.data_dir / "audit.db")
+    try:
+        _json(log.query(identity_id=identity, limit=limit))
+    finally:
+        log.close()
 
 
 if __name__ == "__main__":

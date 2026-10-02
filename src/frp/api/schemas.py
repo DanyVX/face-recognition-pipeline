@@ -141,6 +141,9 @@ class IdentifyResponse(BaseModel):
 class DeleteResponse(BaseModel):
     identity_id: str
     embeddings_removed: int
+    erasure_verified: bool = Field(
+        description="True when the post-removal checks (rows, index, snapshots, raw images) passed."
+    )
 
 
 class HealthResponse(BaseModel):

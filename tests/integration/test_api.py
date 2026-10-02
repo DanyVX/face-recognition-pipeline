@@ -163,7 +163,11 @@ async def test_enroll_identify_verify_delete_flow(tmp_path: Path) -> None:
         assert len(two.json()["faces"]) == 2
 
         deleted = await h.client.delete("/v1/identities/alice", headers=h.auth())
-        assert deleted.json() == {"identity_id": "alice", "embeddings_removed": 2}
+        assert deleted.json() == {
+            "identity_id": "alice",
+            "embeddings_removed": 2,
+            "erasure_verified": True,
+        }
         gone = await h.client.delete("/v1/identities/alice", headers=h.auth())
         assert gone.status_code == 404 and error_of(gone)["code"] == "IDENTITY_NOT_FOUND"
         after = (await h.identify(1, noise_seed=4)).json()
@@ -660,7 +664,7 @@ async def test_metrics_require_a_key_by_default_and_expose_the_expected_series(
         assert (await h.client.get("/metrics")).status_code == 200
 
 
-async def test_stored_raw_images_flag_is_refused_until_encryption_exists(tmp_path: Path) -> None:
+async def test_stored_raw_images_flag_is_refused_without_a_raw_store(tmp_path: Path) -> None:
     from frp.config import ConfigError
 
     with pytest.raises(ConfigError, match="STORE_RAW_IMAGES"):

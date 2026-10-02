@@ -15,6 +15,7 @@ import math
 import threading
 from dataclasses import dataclass, field
 from enum import StrEnum
+from pathlib import Path
 from typing import Final
 
 import numpy as np
@@ -366,6 +367,20 @@ class Gallery:
 
     def __len__(self) -> int:
         return len(self._meta)
+
+    def has_embedding(self, embedding_id: int) -> bool:
+        """Whether the in-memory index still holds this embedding (used to verify erasure)."""
+        with self._lock:
+            return embedding_id in self._index
+
+    def save_snapshot(self, path: Path) -> None:
+        """Write an index snapshot (encrypted when the store has a key) and register it.
+
+        Registered snapshots are rewritten without an identity's vectors when it is erased.
+        """
+        with self._lock:
+            self._index.save(path, self.store.cipher)
+            self.store.register_snapshot(str(path.resolve()))
 
     def stats(self) -> dict[str, object]:
         with self._lock:

@@ -31,6 +31,7 @@ from frp.gallery import (
 from frp.imageio import LoadedImage, load_image
 from frp.pipeline import FacePipeline, PreparedFace
 from frp.quality import QualityThresholds, build_gates
+from frp.rawstore import RawImageStore
 
 logger = logging.getLogger(__name__)
 T = TypeVar("T")
@@ -99,7 +100,9 @@ class RecognitionService:
         settings: Settings,
         *,
         stage_timer: StageTimer | None = None,
+        raw_store: RawImageStore | None = None,
     ) -> None:
+        self.raw_store = raw_store
         self.pipeline = pipeline
         self.embedder = embedder
         self.gallery = gallery
@@ -175,6 +178,16 @@ class RecognitionService:
                 embeddings, name=name, identity_id=identity_id, on_existing=on_existing
             ),
         )
+        if self.raw_store is not None:
+            try:
+                for data in images:
+                    self.raw_store.save(result.identity_id, data)
+            except BaseException:
+                # Keep the invariant "raw images exist only for enrolled identities".
+                self.raw_store.delete_identity(result.identity_id)
+                if result.created:
+                    self.gallery.delete(result.identity_id)
+                raise
         return EnrollOutcome(result, tuple(summaries), embeddings)
 
     def verify_images(

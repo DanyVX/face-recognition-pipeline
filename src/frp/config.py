@@ -71,8 +71,21 @@ class Settings(BaseSettings):
     max_concurrent_inference: int = Field(2, ge=1)
     shutdown_grace_seconds: float = Field(20.0, ge=0)
     return_embeddings: bool = False  # when false, embeddings are never returned by the API
+    audit_enabled: bool = True
     metrics_require_auth: bool = True
     idempotency_ttl_seconds: int = Field(86_400, ge=1)
+
+    # Encryption at rest (AES-256-GCM). Provide ENCRYPTION_KEYS ("id:BASE64,id2:BASE64") or
+    # ENCRYPTION_KEY_FILE. Embeddings and index snapshots are always encrypted when a key exists.
+    encryption_keys: str | None = None
+    encryption_active_key: str | None = None  # default: the first key listed
+    encryption_key_file: Path | None = None
+    # Demo/dev only: create the key file if missing. A key stored beside the data does not protect
+    # against theft of the data volume.
+    allow_key_generation: bool = False
+    # Explicit opt-out for development and tests; the service refuses to start unencrypted
+    # otherwise.
+    allow_unencrypted: bool = False
 
     @property
     def provider_list(self) -> list[str]:

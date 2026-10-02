@@ -1,0 +1,45 @@
+{
+  "name": "quality_thresholds",
+  "env": {
+    "timestamp_utc": "2026-10-01T20:18:11+00:00",
+    "python": "3.12.14",
+    "platform": "Windows-11-10.0.26100-SP0",
+    "machine": "AMD64",
+    "processor": "Intel64 Family 6 Model 142 Stepping 9, GenuineIntel",
+    "cpu_count_logical": 4,
+    "cpu_count_physical": 2,
+    "ram_total_gb": 7.9,
+    "packages": {
+      "numpy": "2.5.3",
+      "onnxruntime": "1.30.0",
+      "opencv-python-headless": "5.0.0.93",
+      "pillow": "12.3.0",
+      "faiss-cpu": "1.15.1",
+      "fastapi": "0.142.2",
+      "pydantic": "2.13.5",
+      "typer": "0.27.2"
+    },
+    "git": {
+      "commit": "24398214be3602060647006ff1024705aff7b1f1",
+      "dirty": true,
+      "reason": null
+    }
+  },
+  "params": {
+    "source": "quality_calibration",
+    "tau": 0.2246275544166565
+  },
+  "result": {
+    "thresholds": {
+      "min_face_px": null,
+      "min_det_score": 0.7475247144699096,
+      "min_laplacian_var": 16.611534602705277,
+      "min_brightness": null,
+      "max_brightness": null,
+      "min_contrast": null,
+      "max_abs_yaw_ratio": null,
+      "max_abs_pitch_ratio": null,
+      "reject_cut_off_faces": true
+    }
+  }
+}

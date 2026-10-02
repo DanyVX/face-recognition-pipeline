@@ -397,7 +397,7 @@ def verification_section(docs: Docs) -> str:
         return _section("LFW verification (1:1)", TBD)
     r = doc["result"]
     lines = [
-        f"Run `{provenance(doc)}`. Model `{r['model']}`. Multi-face policy: {r['detection']['multi_face_policy']}.",
+        f"Run {provenance(doc)}. Model `{r['model']}`. Multi-face policy: {r['detection']['multi_face_policy']}.",
         "",
         f"- Accuracy (10-fold): **{pct(r['accuracy_mean'])} +/- {pct(r['accuracy_std'])}** (std over folds; SEM {pct(r['accuracy_sem'])}). "
         f"Failed pairs count as errors; accuracy on valid pairs only: {pct(r['accuracy_valid_only_mean'])}.",
@@ -438,7 +438,7 @@ def open_set_section(docs: Docs) -> str:
     if doc is None:
         return _section("Open-set identification (1:N)", TBD)
     lines = [
-        f"Run `{provenance(doc)}`. Mean +/- std over seeded enrolled/non-enrolled splits.",
+        f"Run {provenance(doc)}. Mean +/- std over seeded enrolled/non-enrolled splits.",
         "",
         "![DET](img/det.png)",
         "",
@@ -468,7 +468,7 @@ def latency_section(docs: Docs) -> str:
         return _section("Latency", TBD)
     r = doc["result"]
     lines = [
-        f"Run `{provenance(doc)}`. Providers: {r['providers']}. Warm-up calls excluded: {r['warmup_calls_excluded']}.",
+        f"Run {provenance(doc)}. Providers: {r['providers']}. Warm-up calls excluded: {r['warmup_calls_excluded']}.",
         "",
         "![latency](img/latency.png)",
         "",
@@ -502,7 +502,7 @@ def robustness_section(docs: Docs) -> str:
         return _section("Robustness slices", TBD)
     r = doc["result"]
     lines = [
-        f"Run `{provenance(doc)}`. Fixed threshold {r['threshold']:.4f} ({r['threshold_source']}). "
+        f"Run {provenance(doc)}. Fixed threshold {r['threshold']:.4f} ({r['threshold_source']}). "
         f"Samples: {r['samples']}. **Small samples**: differences of a few points are not statistically significant.",
         "",
         "![robustness](img/robustness.png)",
@@ -529,7 +529,7 @@ def quality_section(docs: Docs) -> str:
     enabled = {k: v for k, v in r["thresholds"].items() if isinstance(v, float)}
     held = r["held_out"]
     lines = [
-        f"Run `{provenance(doc)}`. Method: fixed decision threshold {r['tau']:.4f} from clean validation pairs; thresholds "
+        f"Run {provenance(doc)}. Method: fixed decision threshold {r['tau']:.4f} from clean validation pairs; thresholds "
         "chosen on a validation set (clean pairs of folds 0-1 plus degraded probes) by cross-fitted gain with a Bonferroni-corrected CI; "
         "evaluated once on held-out folds 2-9 plus degraded test probes.",
         "",
@@ -547,7 +547,7 @@ def index_section(docs: Docs) -> str:
         return _section("Index scaling", TBD)
     r = doc["result"]
     lines = [
-        f"Run `{provenance(doc)}`. Synthetic random unit vectors, dim {r['dim']}. 'planted' queries are noisy copies of a gallery vector; "
+        f"Run {provenance(doc)}. Synthetic random unit vectors, dim {r['dim']}. 'planted' queries are noisy copies of a gallery vector; "
         "'independent' queries have no planted neighbour (a worst case for approximate search, reported for honesty).",
         "",
         "![index](img/index.png)",
@@ -574,7 +574,7 @@ def precision_section(docs: Docs) -> str:
     r = doc["result"]
     a, v = r["embedding_agreement"], r["verification"]
     lines = [
-        f"Run `{provenance(doc)}`. {r['scope']}. Conversion: `{r['fp16_conversion']}`.",
+        f"Run {provenance(doc)}. {r['scope']}. Conversion: `{r['fp16_conversion']}`.",
         "",
         f"- Per-image cosine fp32 vs fp16 over {a['n']:.0f} crops: min {a['cosine_min']:.6f}, 1st percentile {a['cosine_p1']:.6f}, mean {a['cosine_mean']:.6f}.",
         f"- LFW accuracy: fp32 {pct(v['fp32']['accuracy_mean'])}, fp16 {pct(v['fp16']['accuracy_mean'])}; "

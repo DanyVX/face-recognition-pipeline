@@ -61,4 +61,18 @@ jobs:
       - run: uv sync --python 3.12
       - run: uv run pip-audit
 
-  # A docker-build job is added together with the Dockerfile (M7/M8).
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: docker build -t frp:ci .
+      # Skip the entrypoint (it would download the models); check the image itself.
+      - name: Runs as a non-root user
+        run: test "$(docker run --rm --entrypoint id frp:ci -u)" != "0"
+      - name: CLI starts inside the image
+        run: docker run --rm --entrypoint frp frp:ci version
+      - name: Refuses to run without an encryption key
+        run: |
+          if docker run --rm --entrypoint frp frp:ci check-config; then
+            echo "expected check-config to fail without keys"; exit 1
+          fi

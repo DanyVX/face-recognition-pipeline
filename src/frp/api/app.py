@@ -33,7 +33,7 @@ from starlette.requests import ClientDisconnect
 from starlette.responses import Response
 
 from frp import __version__
-from frp.api.audit import AuditEvent, AuditSink, discard
+from frp.api.audit import AuditEvent, AuditSink, SqliteAuditLog, discard, redacted_id
 from frp.api.auth import ApiKeyRecord, ApiKeyStore
 from frp.api.errors import (
     InvalidRequestError,
@@ -57,6 +57,7 @@ from frp.api.schemas import (
     VerifyResponse,
 )
 from frp.config import ConfigError, Settings
+from frp.erasure import erase_identity
 from frp.errors import FrpError
 from frp.gallery import OnExisting
 from frp.service import FaceSummary, RecognitionService
@@ -95,6 +96,7 @@ class Runtime:
     in_flight: InFlight
     slots: threading.BoundedSemaphore
     audit: AuditSink = discard
+    audit_log: SqliteAuditLog | None = None
     service: RecognitionService | None = None
     ready: bool = False
     draining: bool = False
@@ -281,13 +283,18 @@ def create_app(
 ) -> FastAPI:
     """Build the application. ``service`` (ready immediately) or ``service_factory`` (loaded in
     the background) supplies the recognition service; the default factory loads the real models."""
-    if settings.store_raw_images:
+    if settings.store_raw_images and service is not None and service.raw_store is None:
         raise ConfigError(
-            "STORE_RAW_IMAGES=true is not available until encrypted storage is configured; "
-            "raw face images are never written unencrypted."
+            "STORE_RAW_IMAGES=true requires the encrypted raw-image store; raw face images are "
+            "never written unencrypted."
         )
     settings.data_dir.mkdir(parents=True, exist_ok=True)
     metrics = Metrics()
+    audit_log = (
+        SqliteAuditLog(settings.data_dir / "audit.db")
+        if settings.audit_enabled and audit_sink is None
+        else None
+    )
     rt = Runtime(
         settings=settings,
         metrics=metrics,
@@ -298,7 +305,8 @@ def create_app(
         ),
         in_flight=InFlight(),
         slots=threading.BoundedSemaphore(settings.max_concurrent_inference),
-        audit=audit_sink or discard,
+        audit=audit_sink or audit_log or discard,
+        audit_log=audit_log,
     )
 
     def default_factory() -> RecognitionService:
@@ -344,6 +352,8 @@ def create_app(
             rt.service.close()
         rt.keys.close()
         rt.idempotency.close()
+        if rt.audit_log is not None:
+            rt.audit_log.close()
 
     app = FastAPI(
         title="face-recognition-pipeline",
@@ -644,23 +654,43 @@ def create_app(
         "/v1/identities/{identity_id}",
         response_model=DeleteResponse,
         tags=["recognition"],
-        summary="Erase an identity and all its embeddings",
+        summary="Delete an identity and everything stored about it",
+        description=(
+            "Removes the identity, its embeddings, stored raw images, its vectors in registered "
+            "index snapshots and its replay records, redacts it in the audit log, vacuums the "
+            "database and verifies the result. Backups made outside this service are not reached."
+        ),
         responses={
             **COMMON_ERRORS,
             404: {"model": ErrorResponse, "description": "No such identity."},
         },
     )
     async def delete_identity(
-        identity_id: str, request: Request, _key: ApiKeyRecord = Depends(authenticate)
+        identity_id: str, request: Request, key: ApiKeyRecord = Depends(authenticate)
     ) -> JSONResponse:
         svc = require_ready(rt)
         try:
-            removed = await anyio.to_thread.run_sync(svc.delete, identity_id)
+            report = await anyio.to_thread.run_sync(
+                lambda: erase_identity(
+                    svc,
+                    identity_id,
+                    idempotency=rt.idempotency,
+                    audit_log=rt.audit_log,
+                    actor=key.key_id,
+                    request_id=request_id_of(request),
+                )
+            )
         except FrpError as exc:
             audit(rt, request, "delete", identity_id, exc.code)
             raise
-        await anyio.to_thread.run_sync(rt.idempotency.purge_identity, identity_id)
-        audit(rt, request, "delete", identity_id, "ok")
-        return JSONResponse({"identity_id": identity_id, "embeddings_removed": removed})
+        if rt.audit_log is None:  # erase_identity already recorded its event in the audit log
+            audit(rt, request, "delete", redacted_id(identity_id), "ok")
+        return JSONResponse(
+            {
+                "identity_id": identity_id,
+                "embeddings_removed": report.embeddings_removed,
+                "erasure_verified": report.verified,
+            }
+        )
 
     return app

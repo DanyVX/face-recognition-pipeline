@@ -23,6 +23,7 @@ from typing import Final
 import numpy as np
 from numpy.typing import NDArray
 
+from frp.crypto import DecryptionError
 from frp.embed.base import EmbeddingBatch, ModelInfo
 from frp.errors import (
     FrpError,
@@ -33,7 +34,7 @@ from frp.errors import (
 from frp.index.format import PayloadCipher
 from frp.store.validation import normalize_name, validate_identity_id
 
-SCHEMA_VERSION: Final = 1
+SCHEMA_VERSION: Final = 2
 
 _SCHEMA = """
 CREATE TABLE identities (
@@ -54,6 +55,21 @@ CREATE TABLE embeddings (
     created_at         TEXT NOT NULL
 );
 CREATE INDEX embeddings_by_identity ON embeddings(rid);
+"""
+
+# Added in schema v2: registries needed for erasure ("snapshots" and encrypted raw images).
+_SCHEMA_V2 = """
+CREATE TABLE snapshots (
+    path       TEXT PRIMARY KEY,
+    created_at TEXT NOT NULL
+);
+CREATE TABLE raw_images (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    identity_id TEXT NOT NULL,
+    filename    TEXT NOT NULL UNIQUE,
+    created_at  TEXT NOT NULL
+);
+CREATE INDEX raw_images_by_identity ON raw_images(identity_id);
 """
 
 
@@ -84,8 +100,13 @@ def _now() -> str:
     return datetime.now(UTC).isoformat(timespec="seconds")
 
 
+def _aad_for(identity_id: str, model_hash: str, preprocess_version: str) -> bytes:
+    """Associated data binding an encrypted blob to its identity and model."""
+    return f"emb|{identity_id}|{model_hash}|{preprocess_version}".encode()
+
+
 def _aad(identity_id: str, info: ModelInfo) -> bytes:
-    return f"emb|{identity_id}|{info.model_hash}|{info.preprocess_version}".encode()
+    return _aad_for(identity_id, info.model_hash, info.preprocess_version)
 
 
 class IdentityStore:
@@ -107,13 +128,29 @@ class IdentityStore:
             (version,) = self._db.execute("PRAGMA user_version").fetchone()
             if version == 0:
                 self._db.executescript(
-                    "BEGIN;" + _SCHEMA + f"PRAGMA user_version={SCHEMA_VERSION};COMMIT;"
+                    "BEGIN;"
+                    + _SCHEMA
+                    + _SCHEMA_V2
+                    + f"PRAGMA user_version={SCHEMA_VERSION};COMMIT;"
+                )
+            elif version == 1:  # migrate: v2 only adds tables
+                self._db.executescript(
+                    "BEGIN;" + _SCHEMA_V2 + f"PRAGMA user_version={SCHEMA_VERSION};COMMIT;"
                 )
             elif version != SCHEMA_VERSION:
                 raise StoreSchemaError(
                     f"Store schema version {version} is not supported (this build uses "
                     f"{SCHEMA_VERSION}). Export your data and re-create the store."
                 )
+
+    @property
+    def cipher(self) -> PayloadCipher | None:
+        return self._cipher
+
+    @property
+    def path(self) -> str:
+        """Database file path (``:memory:`` for an in-memory store)."""
+        return self._path
 
     def close(self) -> None:
         with self._lock:
@@ -294,7 +331,17 @@ class IdentityStore:
             dim=int(row["dim"]),
         )
         raw: bytes = row["vector"]
+        plaintext_size = info.dim * 4
+        if self._cipher is None and len(raw) != plaintext_size:
+            raise DecryptionError(
+                "Stored embeddings are encrypted but no encryption key is configured."
+            )
         if self._cipher is not None:
+            if len(raw) == plaintext_size:
+                raise DecryptionError(
+                    "Unencrypted embeddings found while encryption is enabled; run "
+                    "`frp encryption migrate` to encrypt them."
+                )
             raw = self._cipher.decrypt(raw, _aad(row["identity_id"], info))
         vector = np.frombuffer(raw, dtype="<f4").astype(np.float32)
         if vector.shape[0] != info.dim:
@@ -332,6 +379,16 @@ class IdentityStore:
             decoded = [self._row_to_embedding(r) for r in rows]
         yield from decoded
 
+    def embedding_ids_of(self, identity_id: str) -> list[int]:
+        """Embedding ids of an identity without decrypting anything (works even without keys)."""
+        with self._lock:
+            rows = self._db.execute(
+                "SELECT e.embedding_id FROM embeddings e JOIN identities i ON i.rid = e.rid "
+                "WHERE i.identity_id = ? ORDER BY e.embedding_id",
+                (identity_id,),
+            ).fetchall()
+        return [int(r["embedding_id"]) for r in rows]
+
     def count_embeddings(self) -> int:
         with self._lock:
             (n,) = self._db.execute("SELECT COUNT(*) FROM embeddings").fetchone()
@@ -352,6 +409,80 @@ class IdentityStore:
                 for r in rows
             }
         )
+
+    # -- encryption maintenance ----------------------------------------------------------------
+
+    def reencrypt(self) -> int:
+        """Re-seal every embedding with the cipher's *current* key; returns how many rows.
+
+        Used for key rotation (after the active key changed) and to encrypt a store that was
+        created without encryption (plaintext rows are recognized by their exact size).
+        """
+        cipher = self._cipher
+        if cipher is None:
+            raise ValueError("reencrypt needs an encryption cipher")
+        count = 0
+        with self._lock:
+            rows = self._db.execute(
+                "SELECT e.embedding_id, i.identity_id, e.model_hash, e.preprocess_version, "
+                "e.dim, e.vector FROM embeddings e JOIN identities i ON i.rid = e.rid"
+            ).fetchall()
+            self._db.execute("BEGIN")
+            try:
+                for row in rows:
+                    aad = _aad_for(row["identity_id"], row["model_hash"], row["preprocess_version"])
+                    blob: bytes = row["vector"]
+                    plain = blob if len(blob) == int(row["dim"]) * 4 else cipher.decrypt(blob, aad)
+                    self._db.execute(
+                        "UPDATE embeddings SET vector = ? WHERE embedding_id = ?",
+                        (cipher.encrypt(plain, aad), row["embedding_id"]),
+                    )
+                    count += 1
+                self._db.execute("COMMIT")
+            except BaseException:
+                self._db.execute("ROLLBACK")
+                raise
+        return count
+
+    def raw_vector_blobs(self) -> list[bytes]:
+        """The stored vector column as is (ciphertext when encrypted); for key-usage reports."""
+        with self._lock:
+            return [bytes(r["vector"]) for r in self._db.execute("SELECT vector FROM embeddings")]
+
+    # -- snapshot and raw-image registries (needed by erasure) ------------------------------------
+
+    def register_snapshot(self, path: str) -> None:
+        with self._lock:
+            self._db.execute(
+                "INSERT OR REPLACE INTO snapshots(path, created_at) VALUES (?, ?)", (path, _now())
+            )
+
+    def list_snapshots(self) -> list[str]:
+        with self._lock:
+            return [r["path"] for r in self._db.execute("SELECT path FROM snapshots ORDER BY path")]
+
+    def forget_snapshot(self, path: str) -> None:
+        with self._lock:
+            self._db.execute("DELETE FROM snapshots WHERE path = ?", (path,))
+
+    def add_raw_image(self, identity_id: str, filename: str) -> None:
+        with self._lock:
+            self._db.execute(
+                "INSERT INTO raw_images(identity_id, filename, created_at) VALUES (?, ?, ?)",
+                (identity_id, filename, _now()),
+            )
+
+    def raw_images_of(self, identity_id: str) -> list[str]:
+        with self._lock:
+            rows = self._db.execute(
+                "SELECT filename FROM raw_images WHERE identity_id = ? ORDER BY id", (identity_id,)
+            ).fetchall()
+        return [r["filename"] for r in rows]
+
+    def forget_raw_images(self, identity_id: str) -> int:
+        with self._lock:
+            cur = self._db.execute("DELETE FROM raw_images WHERE identity_id = ?", (identity_id,))
+            return cur.rowcount
 
     # -- maintenance -------------------------------------------------------------------------
 
