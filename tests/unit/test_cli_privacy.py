@@ -21,6 +21,13 @@ runner = CliRunner()
 
 @pytest.fixture
 def env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    for name in (
+        "ENCRYPTION_KEYS",
+        "ENCRYPTION_ACTIVE_KEY",
+        "ENCRYPTION_KEY_FILE",
+        "ALLOW_UNENCRYPTED",
+    ):
+        monkeypatch.delenv(name, raising=False)  # the developer's shell must not leak in
     monkeypatch.setenv("DATA_DIR", str(tmp_path / "data"))
     monkeypatch.setenv("MODEL_DIR", str(tmp_path / "models"))
     monkeypatch.setattr(cli, "build_service", lambda: make_service(tmp_path))

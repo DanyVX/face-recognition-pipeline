@@ -6,6 +6,8 @@ All notable changes to this project are documented here. Format follows
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-10-02
+
 ### Added
 - Repository skeleton, tooling (uv, ruff, mypy, pytest, pre-commit), CI, and settings/environment
   logging (M0).
