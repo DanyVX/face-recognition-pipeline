@@ -118,8 +118,8 @@ pose, mirrored landmark order, NaN landmarks) are covered by tests; none are lis
 - **Responses include names** (identify returns candidate names); treat the API as handling
   personal data and restrict who holds keys.
 - **No pagination or listing endpoint** over HTTP; listing is available through the CLI.
-- **STORE_RAW_IMAGES is refused** until encrypted storage exists (M8): the service never writes
-  uploaded images to disk.
+- **STORE_RAW_IMAGES** is refused by the API unless the service was built with the sealed raw
+  image store (M8); by default nothing uploaded is written to disk.
 - No CORS configuration is provided; browser clients need a proxy or an explicit change.
 
 ### Spec edge cases for M7 and where they are tested (`tests/integration/test_api.py`)
@@ -136,3 +136,30 @@ pose, mirrored landmark order, NaN landmarks) are covered by tests; none are lis
 | Readiness false until models loaded; load failure | `test_not_ready_until_models_are_loaded`, `test_model_loading_failure_is_reported_*` |
 | Graceful shutdown drains in-flight requests | `test_graceful_shutdown_drains_in_flight_requests` |
 | Load smoke | `tests/integration/test_api_load.py` (in-process concurrency; real uvicorn socket test is `slow`) |
+
+## M8 (privacy and security): limits
+See `docs/THREAT_MODEL.md` for the threat-by-threat view; the items below are the honest gaps.
+- **Not encrypted:** identity ids, names, timestamps, embedding counts and the audit log. Only
+  embedding vectors, index snapshots and raw images are sealed.
+- **Key handling is minimal:** keys come from an environment variable or a JSON file. There is no
+  KMS/HSM integration (the `KeyProvider` protocol is the extension point), no automatic rotation
+  schedule, and the demo option `ALLOW_KEY_GENERATION` stores the key beside the data.
+- **Lost key = lost gallery**, and the service (including `frp erase`) cannot start without it.
+- **Erasure scope:** it cannot reach backups, copies of the data directory, snapshots that were
+  not registered (`frp snapshot` registers), or physical remnants (SSD wear levelling, OS caches,
+  swap). The in-process verification checks the application's own artefacts, not the disk.
+- **Erasure while serving:** `frp erase` is a separate process; a running service keeps its own
+  in-memory index. Use the `DELETE` endpoint on a running service, or stop it first.
+- **Audit log redaction is reversible by guessing:** erased ids become `erased:<12 hex of
+  unsalted SHA-256>`, so an easily guessed id (e.g. a chosen id like "alice") can be re-linked by
+  hashing candidates. Generated ids are random. The log is not tamper-evident and a failed audit
+  write is logged, not fatal.
+- **No liveness / presentation-attack detection, no demographic fairness evaluation.** A photo of
+  an enrolled person will likely verify.
+- **Scores are returned to authenticated callers**, which enables hill-climbing probes; rate
+  limits slow it down but do not stop it.
+- **Docker artefacts are unverified locally:** the Dockerfile, compose file and entrypoint were
+  written on a machine without Docker. They are first built by the CI `docker` job; until that
+  has run on GitHub, treat them as untested. Required system library (`libgomp1`) and the pinned
+  `uv` image tag are likewise unverified.
+- **Encryption performance** was not benchmarked separately; startup decrypts every embedding.

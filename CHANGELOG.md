@@ -42,3 +42,18 @@ All notable changes to this project are documented here. Format follows
   Prometheus metrics) with API keys, per-key rate limits, upload limits and timeouts, idempotent
   enroll, consistent error schema, graceful shutdown; CLI commands (`serve`, `keys`, `enroll`,
   `verify`, `identify`, `list`, `delete`); structured JSON logging (M7).
+
+- AES-256-GCM encryption at rest for embeddings and index snapshots with a keyring and key
+  rotation (`frp encryption migrate`), optional sealed raw-image store, append-only audit log,
+  orchestrated and verified identity erasure (`frp erase`, `DELETE /v1/identities/{id}`),
+  `frp keys generate-encryption-key`, `frp snapshot`, `frp audit`, threat model, security
+  operations guide, Dockerfile, compose file and CI docker job (M8). The service now refuses to
+  start without an encryption key unless `ALLOW_UNENCRYPTED=true`.
+
+### Changed
+- `DELETE /v1/identities/{id}` now also returns `erasure_verified`.
+- `frp check-config` also validates the encryption configuration.
+
+### Fixed
+- `bench.latency` crashed when a detection could not be aligned (implausible landmarks); it now
+  times only alignable detections and reports `n_alignable`.

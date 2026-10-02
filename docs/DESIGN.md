@@ -277,3 +277,52 @@ Backends sit behind `FaceDetector` / `FaceEmbedder` protocols so they can be swa
   requests (bounded by `SHUTDOWN_GRACE_SECONDS`), then closes the stores.
 - Inference runs in worker threads behind a semaphore (`MAX_CONCURRENT_INFERENCE`); a request that
   cannot get a slot in time gets `OVERLOADED`.
+
+### D-028 (2026-10-02): encryption at rest - AES-256-GCM, key id in the blob
+- Embeddings (SQLite rows) and index snapshots are sealed with AES-256-GCM from the
+  `cryptography` package. Blob layout: `version | key_id_len | key_id | nonce(12) | ciphertext+tag`.
+  A fresh random 96-bit nonce per blob; with random nonces the safe limit is far above any
+  gallery this project will hold.
+- The key id lives in the blob, so a keyring (`ENCRYPTION_KEYS=id:BASE64,id2:BASE64`, one active
+  key) can open old blobs while new ones use the active key. Rotation is `frp encryption migrate`;
+  after it reports no blobs under the old key, that key can be removed.
+- AAD binds each row's blob to `(identity, model_id, model_hash)`, and a snapshot's blob to its
+  header hash, so swapping blobs between identities or tampering with a header fails decryption
+  instead of silently mis-attributing a face.
+- Key sources sit behind a `KeyProvider` protocol (env, file). A KMS/Vault provider would be one
+  more class; none is claimed.
+- The service refuses to start without a key unless `ALLOW_UNENCRYPTED=true` (loud warning).
+  Silent plaintext fallback is the failure mode this avoids. Names and metadata are NOT encrypted
+  (see LIMITATIONS): searchability and simplicity, at the cost of metadata exposure.
+
+### D-029 (2026-10-02): raw images are off by default, and sealed when on
+- `STORE_RAW_IMAGES=false` by default (retention: none). When enabled it requires encryption keys;
+  images are stored as sealed files under `data/raw/` and registered in SQLite so erasure can find
+  them. Enrollment saves them only after the enrollment succeeded and rolls back on failure.
+
+### D-030 (2026-10-02): erasure is an orchestrated, verified operation
+- `erase_identity` removes the SQLite rows (values zeroed before delete, `secure_delete` on, rollback
+  journal rather than WAL so there is no side file holding old pages, then vacuum), rebuilds the
+  in-memory index, deletes sealed raw images, rewrites every registered index snapshot without the
+  identity, purges idempotency records, redacts the identity id in the audit log, and then
+  VERIFIES each step. A failed verification raises `ERASURE_NOT_VERIFIED` instead of returning
+  success.
+- The store-level deletion needs no decryption (it works on row ids), but the full orchestration
+  runs through the service, and the gallery decrypts every embedding at startup, so with a lost
+  key the service (and `frp erase`) cannot start. That is deliberate (undecryptable data should
+  fail loudly, not be skipped); with a lost key the data is unreadable anyway, and the clean-up
+  is to delete the data directory.
+- Honest scope: backups, copies of the database file, and snapshots that were never registered are
+  out of reach; the report says what it checked. The verification also byte-scans the database for
+  the person's name and id and reports the result as an informational note, not a guarantee about
+  the filesystem (journals, free blocks on SSDs, OS caches).
+
+### D-031 (2026-10-02): audit log
+- Append-only SQLite table (`audit.db`) of who/what/when: request id, API-key id, action, identity
+  id, outcome. Never biometric content, never names, never scores' inputs. A failure to write an
+  audit event is logged and never fails the request (availability over completeness, noted in
+  LIMITATIONS). On erasure the identity id in past events is replaced by `erased:` plus the first
+  12 hex chars of its (unsalted) SHA-256, so counts and timing survive and rows of one erased
+  person stay groupable. Trade-off: the token is not salted, so an easily guessed id (a chosen id
+  like "alice") could be re-linked by hashing candidates; generated ids are random. See
+  LIMITATIONS.
