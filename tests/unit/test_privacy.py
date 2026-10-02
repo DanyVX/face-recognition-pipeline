@@ -176,7 +176,11 @@ def test_rotation_also_reseals_registered_snapshots(tmp_path: Path) -> None:
 # --- configuration ----------------------------------------------------------------------
 
 
-def test_the_service_refuses_to_run_without_a_key_unless_explicitly_allowed(tmp_path: Path) -> None:
+def test_the_service_refuses_to_run_without_a_key_unless_explicitly_allowed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    for name in ("ENCRYPTION_KEYS", "ENCRYPTION_KEY_FILE", "ALLOW_UNENCRYPTED"):
+        monkeypatch.delenv(name, raising=False)
     with pytest.raises(ConfigError, match="No encryption key"):
         build_cipher(make_settings(tmp_path))
     assert build_cipher(make_settings(tmp_path, allow_unencrypted=True)) is None
