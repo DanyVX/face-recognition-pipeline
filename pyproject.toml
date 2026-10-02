@@ -26,6 +26,11 @@ dependencies = [
 frp = "frp.cli:app"
 
 [dependency-groups]
+bench = [
+    "matplotlib>=3.11.2",
+    "onnx>=1.23.1",
+    "onnxconverter-common>=1.16.0",
+]
 dev = [
     "hypothesis>=6.100",
     "mypy>=1.10",
@@ -53,6 +58,7 @@ select = ["B", "C4", "E", "F", "I", "PTH", "RUF", "S", "SIM", "UP", "W"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["S101"]
+"bench/report.py" = ["E501"]  # long prose strings in the markdown templates
 
 [tool.mypy]
 strict = true
@@ -60,7 +66,7 @@ plugins = ["pydantic.mypy"]
 files = ["src", "tests", "scripts", "bench"]
 
 [[tool.mypy.overrides]]
-module = ["onnxruntime", "onnxruntime.*"]
+module = ["onnxruntime", "onnxruntime.*", "onnxconverter_common", "onnxconverter_common.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
@@ -82,3 +88,4 @@ show_missing = true
 
 [tool.uv]
 link-mode = "copy"
+default-groups = ["dev", "bench"]

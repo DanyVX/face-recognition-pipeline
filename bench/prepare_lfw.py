@@ -31,7 +31,7 @@ from frp.envinfo import collect_env
 from frp.errors import FrpError, InvalidImageError, InvalidLandmarksError, NoFaceError
 from frp.factory import build_detector
 from frp.imageio import load_image
-from frp.lfw import identities
+from frp.lfw import identities, pair_image_paths, parse_pairs, subset_pairs
 from frp.pipeline import FacePipeline
 
 STATUS_OK: Final = 0
@@ -49,16 +49,21 @@ def cache_dir(limit: int | None) -> Path:
 
 
 def list_images(lfw_root: Path, limit: int | None) -> list[Path]:
-    paths = [p for images in identities(lfw_root).values() for p in images]
+    """All LFW images, or (tiny run) the images of the first ``limit`` pairs per class per fold."""
     if limit:
-        step = max(1, len(paths) // limit)  # spread over identities, deterministic
-        paths = paths[::step][:limit]
-    return paths
+        pairs = parse_pairs((lfw_root.parent / "pairs.txt").read_text(encoding="utf-8"))
+        return [lfw_root / rel for rel in pair_image_paths(subset_pairs(pairs, limit))]
+    return [p for images in identities(lfw_root).values() for p in images]
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--limit", type=int, default=None, help="process about N images (tiny run)")
+    parser.add_argument(
+        "--limit",
+        type=int,
+        default=None,
+        help="tiny run: only the images of the first N pairs per class per fold",
+    )
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
 

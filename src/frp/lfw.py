@@ -6,6 +6,7 @@ data is for research use and must never be committed or redistributed from this 
 
 from __future__ import annotations
 
+from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
@@ -82,3 +83,27 @@ def identities(root: Path) -> dict[str, list[Path]]:
         if images:
             result[person_dir.name] = images
     return result
+
+
+def relative_image(name: str, index: int) -> str:
+    """``Name/Name_0001.jpg`` (forward slashes on every platform)."""
+    return f"{name}/{name}_{index:04d}.jpg"
+
+
+def subset_pairs(pairs: list[LfwPair], per_class_per_fold: int) -> list[LfwPair]:
+    """The first ``per_class_per_fold`` genuine and impostor pairs of every fold (tiny runs)."""
+    seen: dict[tuple[int, bool], int] = defaultdict(int)
+    chosen: list[LfwPair] = []
+    for p in pairs:
+        if seen[(p.fold, p.same)] < per_class_per_fold:
+            chosen.append(p)
+            seen[(p.fold, p.same)] += 1
+    return chosen
+
+
+def pair_image_paths(pairs: list[LfwPair]) -> list[str]:
+    """Sorted unique relative image paths used by ``pairs``."""
+    return sorted(
+        {relative_image(p.name_a, p.index_a) for p in pairs}
+        | {relative_image(p.name_b, p.index_b) for p in pairs}
+    )

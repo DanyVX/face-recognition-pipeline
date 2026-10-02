@@ -16,7 +16,9 @@ End-to-end, benchmarked face recognition pipeline: detect, align, embed, index, 
 
 ## Key results
 
+<!-- RESULTS:START -->
 TBD (not yet measured)
+<!-- RESULTS:END -->
 
 ## Quickstart
 

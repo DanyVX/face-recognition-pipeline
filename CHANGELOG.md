@@ -31,3 +31,9 @@ All notable changes to this project are documented here. Format follows
 
 - Quality features and gates (size, confidence, framing, sharpness, exposure, pose) with reason
   codes, loadable thresholds and `aligned_from_crop` (M5).
+
+- Benchmark suite: metrics (ROC, EER, TAR@FAR, open-set DET, bootstrap/Wilson intervals), LFW
+  10-fold verification with extended impostors and leakage check, open-set identification,
+  robustness slices, per-stage latency, fp16 vs fp32, quality calibration, report generator,
+  `make bench` and `make bench-smoke` (M6). Results are generated separately and are not
+  committed with the code.
