@@ -37,3 +37,8 @@ All notable changes to this project are documented here. Format follows
   robustness slices, per-stage latency, fp16 vs fp32, quality calibration, report generator,
   `make bench` and `make bench-smoke` (M6). Results are generated separately and are not
   committed with the code.
+
+- Recognition service layer, FastAPI service (enroll, verify, identify, delete, health, readiness,
+  Prometheus metrics) with API keys, per-key rate limits, upload limits and timeouts, idempotent
+  enroll, consistent error schema, graceful shutdown; CLI commands (`serve`, `keys`, `enroll`,
+  `verify`, `identify`, `list`, `delete`); structured JSON logging (M7).

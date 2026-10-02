@@ -238,3 +238,42 @@ Backends sit behind `FaceDetector` / `FaceEmbedder` protocols so they can be swa
   caught two real bugs (EER crossing direction, ties in the best-threshold search).
 - **Reporting** (`bench/report.py`) only formats numbers found in `results/*.json`; missing
   results print `TBD (not yet measured)`.
+
+### D-024 (2026-10-02): one service layer behind the API and the CLI
+- `RecognitionService` takes image bytes and returns plain results; the FastAPI app and the Typer
+  CLI are thin adapters over it. All the policy (multi-face policy per operation, thresholds,
+  quality gates, all-or-nothing multi-photo enrollment, error context such as which photo failed)
+  lives in one tested place, so the two interfaces cannot drift.
+- Enrollment rejects images with several faces (the wrong person could be enrolled); queries use
+  the largest face. Both are settings.
+
+### D-025 (2026-10-02): protection implemented below the framework (pure ASGI)
+- `ProtectionMiddleware` enforces the size limit twice (from `Content-Length` before reading, and
+  again by counting streamed bytes, which also covers chunked uploads), an upload deadline, the
+  request timeout, request ids and in-flight counting. Doing it while the body is *received*
+  means a slow or oversized upload is stopped before multipart parsing buffers it.
+- The spooled temporary files behind parsed uploads are closed in a `finally` (a leak the tests
+  caught). Starlette reports malformed multipart as HTTP 400; it is mapped to our
+  `INVALID_REQUEST` schema.
+- Scores in responses are full precision: rounding broke the property that feeding a returned
+  score back as the threshold is accepted (the decision rule is `score >= threshold`).
+
+### D-026 (2026-10-02): auth, rate limiting, idempotency
+- API keys: `frp_<id>_<secret>`, only a SHA-256 digest of the secret is stored (appropriate for a
+  256-bit random secret), constant-time comparison, revocation, created from the CLI.
+- Rate limiting: in-process token bucket per key, applied after authentication so unauthenticated
+  traffic cannot drain someone else's bucket (unauthenticated floods are not limited; use a
+  reverse proxy for that).
+- Idempotency (enroll): scoped per key; same key and content replays the stored response; same
+  key with different content is `IDEMPOTENCY_KEY_REUSED`; concurrent identical requests are
+  serialized by a per-key lock so the work happens once. Only 2xx responses are stored, and
+  stored responses contain no embeddings. Deleting an identity purges its replay records.
+
+### D-027 (2026-10-02): readiness and shutdown
+- Models load in a background task after startup, so the process answers `/healthz` and `/readyz`
+  immediately (an orchestrator can tell "alive but loading" from "dead"); inference endpoints
+  return `NOT_READY` until loading succeeds, and a load failure is reported in `/readyz`.
+- On shutdown the app first stops reporting ready and rejects new inference, waits for in-flight
+  requests (bounded by `SHUTDOWN_GRACE_SECONDS`), then closes the stores.
+- Inference runs in worker threads behind a semaphore (`MAX_CONCURRENT_INFERENCE`); a request that
+  cannot get a slot in time gets `OVERLOADED`.

@@ -20,9 +20,12 @@ class ConfigError(RuntimeError):
 class Settings(BaseSettings):
     """All runtime configuration. Add a field here and to ``.env.example`` together."""
 
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore", frozen=True)
+    model_config = SettingsConfigDict(
+        env_file=".env", extra="ignore", frozen=True, env_ignore_empty=True
+    )
 
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
+    log_format: Literal["text", "json"] = "text"
     # Raw uploaded images are biometric data: never persisted unless explicitly enabled.
     store_raw_images: bool = False
     data_dir: Path = Path("data")
@@ -40,9 +43,44 @@ class Settings(BaseSettings):
     onnx_providers: str = "CUDAExecutionProvider,CPUExecutionProvider"
     onnx_threads: int | None = Field(None, ge=1)  # None = ORT default (all cores)
 
+    # Gallery and matching. The thresholds are PROVISIONAL placeholders until the LFW results in
+    # docs/RESULTS.md are used to choose operating points; set them deliberately for your use.
+    db_filename: str = "frp.db"
+    index_backend: Literal["flat", "hnsw", "ivf"] = "flat"
+    aggregation: Literal["max", "mean"] = "max"
+    verify_threshold: float = Field(0.4, ge=-1.0, le=1.0)
+    identify_threshold: float = Field(0.4, ge=-1.0, le=1.0)
+    duplicate_threshold: float = Field(0.6, ge=-1.0, le=1.0)
+    duplicate_policy: Literal["ignore", "warn", "reject"] = "warn"
+    max_embeddings_per_identity: int = Field(50, ge=1)
+    enroll_face_policy: Literal["largest", "reject"] = "reject"
+    query_face_policy: Literal["largest", "reject"] = "largest"
+    quality_thresholds_file: Path | None = None  # None = built-in lenient defaults
+
+    # HTTP API
+    api_host: str = "127.0.0.1"
+    api_port: int = Field(8000, ge=1, le=65535)
+    max_upload_bytes: int = Field(10 * 1024 * 1024, ge=1024)
+    max_images_per_enroll: int = Field(10, ge=1)
+    max_image_side: int = Field(4096, ge=64)
+    max_image_pixels: int = Field(128_000_000, ge=1024)
+    request_timeout_seconds: float = Field(30.0, gt=0)
+    upload_timeout_seconds: float = Field(15.0, gt=0)
+    rate_limit_per_minute: int = Field(60, ge=1)
+    rate_limit_burst: int = Field(20, ge=1)
+    max_concurrent_inference: int = Field(2, ge=1)
+    shutdown_grace_seconds: float = Field(20.0, ge=0)
+    return_embeddings: bool = False  # when false, embeddings are never returned by the API
+    metrics_require_auth: bool = True
+    idempotency_ttl_seconds: int = Field(86_400, ge=1)
+
     @property
     def provider_list(self) -> list[str]:
         return [p.strip() for p in self.onnx_providers.split(",") if p.strip()]
+
+    @property
+    def db_path(self) -> Path:
+        return self.data_dir / self.db_filename
 
 
 def load_settings() -> Settings:

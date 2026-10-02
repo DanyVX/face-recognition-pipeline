@@ -107,3 +107,32 @@ pose, mirrored landmark order, NaN landmarks) are covered by tests; none are lis
   `bench/degrade.py`; they may not transfer to other cameras or populations.
 - Rejecting low-quality faces is a trade-off, not a free improvement: every gate has a reject
   rate, reported next to its accuracy gain.
+
+## M7 (API): limits
+- **Single node.** The rate limiter, idempotency locks and gallery lock are per process. Several
+  API workers or replicas would each have their own buckets and could race on idempotency keys.
+- **Unauthenticated traffic is not rate limited** (only authenticated keys are). Put a reverse
+  proxy in front for IP-level limits and TLS; the service speaks plain HTTP.
+- **Timeouts do not cancel work.** After a request timeout the worker thread keeps running to
+  completion and its result is discarded.
+- **Responses include names** (identify returns candidate names); treat the API as handling
+  personal data and restrict who holds keys.
+- **No pagination or listing endpoint** over HTTP; listing is available through the CLI.
+- **STORE_RAW_IMAGES is refused** until encrypted storage exists (M8): the service never writes
+  uploaded images to disk.
+- No CORS configuration is provided; browser clients need a proxy or an explicit change.
+
+### Spec edge cases for M7 and where they are tested (`tests/integration/test_api.py`)
+| Edge case | Test |
+|---|---|
+| Upload limits (size, dimensions), magic-byte sniffing, decompression bombs | `test_oversized_upload_*`, `test_chunked_upload_*`, `test_file_type_is_decided_by_magic_bytes_*`, `test_decompression_bombs_*` |
+| Request timeout; overload | `test_slow_processing_hits_the_request_timeout`, `test_overload_returns_503_*` |
+| API-key auth; per-key rate limit | `test_missing_wrong_and_revoked_keys_are_401`, `test_per_key_rate_limit_*` |
+| Idempotency key on enroll; concurrent identical requests | `test_idempotent_enroll_*`, `test_concurrent_identical_enroll_requests_*`, `test_reusing_an_idempotency_key_*` |
+| Consistent machine-readable errors | `test_every_error_uses_one_schema_*`, `error_of` used throughout |
+| No raw images persisted; embeddings not returned by default | `test_stored_raw_images_flag_is_refused_*`, `test_embeddings_are_never_returned_*` |
+| Client disconnect mid-upload; extremely slow uploads | `test_client_disconnect_mid_upload_*`, `test_slow_upload_times_out` |
+| Multipart with wrong field names | `test_wrong_multipart_field_names_are_explained`, `test_non_multipart_and_malformed_bodies_*` |
+| Readiness false until models loaded; load failure | `test_not_ready_until_models_are_loaded`, `test_model_loading_failure_is_reported_*` |
+| Graceful shutdown drains in-flight requests | `test_graceful_shutdown_drains_in_flight_requests` |
+| Load smoke | `tests/integration/test_api_load.py` (in-process concurrency; real uvicorn socket test is `slow`) |

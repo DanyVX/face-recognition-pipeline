@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import ClassVar
+from typing import Any, ClassVar
 
 
 class FrpError(Exception):
@@ -10,6 +10,8 @@ class FrpError(Exception):
 
     code: ClassVar[str] = "INTERNAL_ERROR"
     http_status: ClassVar[int] = 500
+    # Optional machine-readable context (for example which uploaded image failed).
+    details: dict[str, Any] | None = None
 
 
 # --- input images -----------------------------------------------------------------------------
